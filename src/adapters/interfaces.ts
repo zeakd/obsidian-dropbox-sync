@@ -1,0 +1,39 @@
+import type {
+  FileInfo,
+  RemoteEntry,
+  SyncEntry,
+  ListChangesResult,
+  DownloadResult,
+} from "../types";
+
+/** 로컬 파일시스템 추상화 */
+export interface FileSystem {
+  read(path: string): Promise<Uint8Array>;
+  write(path: string, data: Uint8Array, mtime?: number): Promise<void>;
+  delete(path: string): Promise<void>;
+  list(): Promise<FileInfo[]>;
+  computeHash(path: string): Promise<string>;
+}
+
+/** 원격 스토리지 추상화 (Dropbox) */
+export interface RemoteStorage {
+  listChanges(cursor?: string): Promise<ListChangesResult>;
+  download(path: string): Promise<DownloadResult>;
+  upload(
+    path: string,
+    data: Uint8Array,
+    rev?: string,
+  ): Promise<RemoteEntry>;
+  delete(path: string): Promise<void>;
+}
+
+/** 동기화 상태 저장소 추상화 */
+export interface SyncStateStore {
+  getEntry(pathLower: string): Promise<SyncEntry | null>;
+  setEntry(entry: SyncEntry): Promise<void>;
+  deleteEntry(pathLower: string): Promise<void>;
+  getAllEntries(): Promise<SyncEntry[]>;
+  clear(): Promise<void>;
+  getMeta(key: string): Promise<string | null>;
+  setMeta(key: string, value: string): Promise<void>;
+}
