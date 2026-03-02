@@ -4,6 +4,7 @@ import {
   createPlan,
   type LocalState,
   type RemoteState,
+  type ClassifyOptions,
 } from "@/sync/planner";
 import type { FileInfo, RemoteEntry, SyncEntry } from "@/types";
 
@@ -79,8 +80,22 @@ describe("classifyChange", () => {
     expect(action.type).toBe("download");
   });
 
-  // 6. 로컬 삭제 (base 있고 remote 미변경) → deleteRemote
-  test("로컬 삭제 + 원격 미변경 → deleteRemote", () => {
+  // 6. 로컬 삭제 (base 있고 remote 미변경) + 삭제 의도 있음 → deleteRemote
+  test("로컬 삭제 + 원격 미변경 + 삭제 의도 → deleteRemote", () => {
+    const remote: RemoteState = {
+      hash: "hash_base",
+      pathDisplay: "test.md",
+      rev: "rev_1",
+      deleted: false,
+    };
+    const action = classifyChange(null, remote, base, { localDeleteIntended: true });
+    expect(action.type).toBe("deleteRemote");
+    if (action.type === "deleteRemote")
+      expect(action.reason).toBe("deleted_on_local");
+  });
+
+  // 6b. 로컬 부재 + 원격 미변경 + 삭제 의도 없음 → download (복구)
+  test("로컬 부재 + 원격 미변경 + 삭제 의도 없음 → download (복구)", () => {
     const remote: RemoteState = {
       hash: "hash_base",
       pathDisplay: "test.md",
@@ -88,9 +103,23 @@ describe("classifyChange", () => {
       deleted: false,
     };
     const action = classifyChange(null, remote, base);
-    expect(action.type).toBe("deleteRemote");
-    if (action.type === "deleteRemote")
-      expect(action.reason).toBe("deleted_on_local");
+    expect(action.type).toBe("download");
+    if (action.type === "download")
+      expect(action.reason).toBe("missing_local_restored");
+  });
+
+  // 6c. 로컬 부재 + 원격 미변경 + localDeleteIntended=false → download (복구)
+  test("로컬 부재 + 원격 미변경 + localDeleteIntended=false → download (복구)", () => {
+    const remote: RemoteState = {
+      hash: "hash_base",
+      pathDisplay: "test.md",
+      rev: "rev_1",
+      deleted: false,
+    };
+    const action = classifyChange(null, remote, base, { localDeleteIntended: false });
+    expect(action.type).toBe("download");
+    if (action.type === "download")
+      expect(action.reason).toBe("missing_local_restored");
   });
 
   // 7. 원격 삭제 (base 있고 local 미변경) → deleteLocal
@@ -288,6 +317,29 @@ describe("createPlan", () => {
     // 원격에만 존재하는 파일
     const plan = createPlan([], [mkRemote("Notes/New.md", "hash")], []);
     expect(plan.items[0].localPath).toBe("Notes/New.md");
+  });
+
+  test("localDeletedPaths로 삭제 의도 전달", () => {
+    const plan = createPlan(
+      [], // 로컬에 a.md 없음
+      [mkRemote("a.md", "hash_a")], // 원격에 있음
+      [mkBase("a.md", "hash_a")], // base에 있음 (이전 동기화됨)
+      { localDeletedPaths: new Set(["a.md"]) },
+    );
+    // 삭제 의도 있음 → deleteRemote
+    expect(plan.items).toHaveLength(1);
+    expect(plan.items[0].action.type).toBe("deleteRemote");
+  });
+
+  test("localDeletedPaths 없으면 부재 파일 download로 복구", () => {
+    const plan = createPlan(
+      [], // 로컬에 a.md 없음
+      [mkRemote("a.md", "hash_a")], // 원격에 있음
+      [mkBase("a.md", "hash_a")], // base에 있음
+    );
+    // 삭제 의도 없음 → download (복구)
+    expect(plan.items).toHaveLength(1);
+    expect(plan.items[0].action.type).toBe("download");
   });
 
   test("stats 정확성", () => {

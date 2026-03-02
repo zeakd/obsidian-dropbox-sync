@@ -1,12 +1,16 @@
 import { dropboxContentHash } from "../hash";
-import type {
-  FileInfo,
-  RemoteEntry,
-  SyncEntry,
-  ListChangesResult,
-  DownloadResult,
+import {
+  RevConflictError,
+  type FileInfo,
+  type RemoteEntry,
+  type SyncEntry,
+  type ListChangesResult,
+  type DownloadResult,
 } from "../types";
 import type { FileSystem, RemoteStorage, SyncStateStore } from "./interfaces";
+
+// re-export for backward compat
+export { RevConflictError };
 
 // ── MemoryFileSystem ──
 
@@ -201,17 +205,6 @@ export class MemoryRemoteStorage implements RemoteStorage {
       size: file.data.length,
       deleted: file.deleted,
     };
-  }
-}
-
-/** Dropbox rev 충돌 에러 */
-export class RevConflictError extends Error {
-  constructor(
-    message: string,
-    public readonly currentRev: string,
-  ) {
-    super(message);
-    this.name = "RevConflictError";
   }
 }
 

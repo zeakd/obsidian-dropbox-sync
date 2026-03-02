@@ -3,7 +3,7 @@ import {
   MemoryRemoteStorage,
   MemoryStateStore,
 } from "@/adapters/memory";
-import { SyncEngine, type CycleResult } from "@/sync/engine";
+import { SyncEngine, type CycleResult, type SyncEngineOptions } from "@/sync/engine";
 import { dropboxContentHash } from "@/hash";
 
 /**
@@ -20,8 +20,8 @@ export class SyncSimulator {
     this.remote = new MemoryRemoteStorage();
   }
 
-  addDevice(name: string): Device {
-    const device = new Device(name, this.remote);
+  addDevice(name: string, options?: SyncEngineOptions): Device {
+    const device = new Device(name, this.remote, options);
     this.devices.set(name, device);
     return device;
   }
@@ -81,15 +81,16 @@ export class SyncSimulator {
 export class Device {
   readonly fs: MemoryFileSystem;
   readonly store: MemoryStateStore;
-  private engine: SyncEngine;
+  readonly engine: SyncEngine;
 
   constructor(
     readonly name: string,
     remote: MemoryRemoteStorage,
+    options?: SyncEngineOptions,
   ) {
     this.fs = new MemoryFileSystem();
     this.store = new MemoryStateStore();
-    this.engine = new SyncEngine({ fs: this.fs, remote, store: this.store });
+    this.engine = new SyncEngine({ fs: this.fs, remote, store: this.store }, options);
   }
 
   async editFile(path: string, content: string): Promise<void> {
@@ -99,6 +100,8 @@ export class Device {
 
   async deleteFile(path: string): Promise<void> {
     await this.fs.delete(path);
+    // 삭제 이벤트 자동 기록 (vault.on('delete') 시뮬레이션)
+    this.engine.trackDelete(path.toLowerCase());
   }
 
   async sync(): Promise<CycleResult> {

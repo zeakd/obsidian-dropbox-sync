@@ -51,6 +51,56 @@ test/
   support/              ← SyncSimulator, FailingRemoteStorage
 ```
 
+## 개발 워크플로우
+
+### 로컬 플러그인 업데이트
+
+```bash
+# 빌드 + 테스트 vault의 플러그인 폴더에 복사
+npm run build && cp main.js manifest.json styles.css ~/Documents/sync-tester/.obsidian/plugins/dropbox-sync/
+```
+
+### 개발 사이클
+
+빌드 → 복사 → 리로드를 한 번에 수행한다:
+
+```bash
+npm run build && cp main.js ~/Documents/sync-tester/.obsidian/plugins/dropbox-sync/
+```
+
+Hot Reload 플러그인이 `.hotreload` 마커를 감지하여 자동 리로드한다. 사용자에게 수동 리로드를 요청하지 않는다.
+
+### 로그 확인
+
+플러그인은 vault 루트에 `.sync-debug.log` 파일을 생성한다.
+
+```bash
+# 실시간 로그 확인
+tail -f ~/Documents/sync-tester/.sync-debug.log
+
+# 로그 파일 초기화
+rm ~/Documents/sync-tester/.sync-debug.log
+```
+
+Obsidian 개발자 콘솔(Cmd+Option+I)에서도 `[Dropbox Sync]` 접두사로 로그가 출력된다.
+
+### 테스트 vault
+
+- 경로: `~/Documents/sync-tester/`
+- 플러그인 경로: `~/Documents/sync-tester/.obsidian/plugins/dropbox-sync/`
+- 실제 Dropbox 연동 테스트용. 프로덕션 vault가 아님.
+
+### .env
+
+빌드 시 Dropbox App Key를 임베드한다. `.gitignore`에 포함됨.
+
+```
+DROPBOX_APP_KEY=your_key_here
+```
+
+빌트인 키가 있으면 사용자는 설정 없이 바로 연결 가능.
+Advanced에서 커스텀 키로 오버라이드할 수 있음.
+
 ## 참조 (vault)
 
 - 아키텍처 결정서: `agents/brill/decisions/dropbox-sync-architecture`

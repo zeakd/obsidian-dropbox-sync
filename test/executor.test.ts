@@ -296,6 +296,197 @@ describe("executePlan", () => {
     expect(result.succeeded).toHaveLength(0);
     expect(result.failed).toHaveLength(0);
   });
+
+  // ── conflict: newest 전략 ──
+
+  test("conflict newest: 로컬이 더 최신 → 로컬 유지", async () => {
+    const localData = new TextEncoder().encode("local version");
+    const remoteData = new TextEncoder().encode("remote version");
+
+    // 로컬 파일 (mtime 더 큼)
+    await fs.write("test.md", localData, 2000);
+    // 원격 파일 (serverModified 더 작음)
+    await remote.upload("test.md", remoteData);
+    // MemoryRemoteStorage의 serverModified는 Date.now()로 설정되지만,
+    // 우리가 테스트하려면 시간 차이가 필요함. 로컬 mtime이 미래값이면 됨.
+    await fs.write("test.md", localData, Date.now() + 10000);
+
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: {
+        type: "conflict",
+        localHash: dropboxContentHash(localData),
+        remoteHash: dropboxContentHash(remoteData),
+      },
+    });
+
+    const result = await executePlan(plan, {
+      ...deps,
+      conflictStrategy: "newest",
+    });
+    expect(result.succeeded).toHaveLength(1);
+
+    // conflict 파일 없어야 함 (newest는 하나만 남김)
+    expect(fs.has("test.conflict.md")).toBe(false);
+    // 로컬 유지
+    expect(await fs.read("test.md")).toEqual(localData);
+    // 원격도 로컬 버전으로
+    const dl = await remote.download("test.md");
+    expect(dl.data).toEqual(localData);
+  });
+
+  test("conflict newest: 원격이 더 최신 → 원격 버전으로 덮어쓰기", async () => {
+    const localData = new TextEncoder().encode("local version");
+    const remoteData = new TextEncoder().encode("remote version");
+
+    // 로컬 파일 (mtime 과거)
+    await fs.write("test.md", localData, 100);
+    // 원격 파일 (serverModified 더 큼 - Date.now())
+    await remote.upload("test.md", remoteData);
+
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: {
+        type: "conflict",
+        localHash: dropboxContentHash(localData),
+        remoteHash: dropboxContentHash(remoteData),
+      },
+    });
+
+    const result = await executePlan(plan, {
+      ...deps,
+      conflictStrategy: "newest",
+    });
+    expect(result.succeeded).toHaveLength(1);
+
+    // 로컬이 원격 버전으로 덮어씌워짐
+    expect(await fs.read("test.md")).toEqual(remoteData);
+    // conflict 파일 없음
+    expect(fs.has("test.conflict.md")).toBe(false);
+  });
+
+  // ── conflict: manual 전략 ──
+
+  test("conflict manual: 사용자가 local 선택", async () => {
+    const localData = new TextEncoder().encode("local version");
+    const remoteData = new TextEncoder().encode("remote version");
+
+    await fs.write("test.md", localData);
+    await remote.upload("test.md", remoteData);
+
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: {
+        type: "conflict",
+        localHash: dropboxContentHash(localData),
+        remoteHash: dropboxContentHash(remoteData),
+      },
+    });
+
+    const result = await executePlan(plan, {
+      ...deps,
+      conflictStrategy: "manual",
+      conflictResolver: async () => "local",
+    });
+    expect(result.succeeded).toHaveLength(1);
+
+    // 로컬 유지
+    expect(await fs.read("test.md")).toEqual(localData);
+    // 원격도 로컬 버전
+    const dl = await remote.download("test.md");
+    expect(dl.data).toEqual(localData);
+    // conflict 파일 없음
+    expect(fs.has("test.conflict.md")).toBe(false);
+  });
+
+  test("conflict manual: 사용자가 remote 선택", async () => {
+    const localData = new TextEncoder().encode("local version");
+    const remoteData = new TextEncoder().encode("remote version");
+
+    await fs.write("test.md", localData);
+    await remote.upload("test.md", remoteData);
+
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: {
+        type: "conflict",
+        localHash: dropboxContentHash(localData),
+        remoteHash: dropboxContentHash(remoteData),
+      },
+    });
+
+    const result = await executePlan(plan, {
+      ...deps,
+      conflictStrategy: "manual",
+      conflictResolver: async () => "remote",
+    });
+    expect(result.succeeded).toHaveLength(1);
+
+    // 로컬이 원격 버전으로 덮어씌워짐
+    expect(await fs.read("test.md")).toEqual(remoteData);
+    // conflict 파일 없음
+    expect(fs.has("test.conflict.md")).toBe(false);
+  });
+
+  test("conflict manual: resolver 없으면 keep_both fallback", async () => {
+    const localData = new TextEncoder().encode("local version");
+    const remoteData = new TextEncoder().encode("remote version");
+
+    await fs.write("test.md", localData);
+    await remote.upload("test.md", remoteData);
+
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: {
+        type: "conflict",
+        localHash: dropboxContentHash(localData),
+        remoteHash: dropboxContentHash(remoteData),
+      },
+    });
+
+    const result = await executePlan(plan, {
+      ...deps,
+      conflictStrategy: "manual",
+      // conflictResolver 없음
+    });
+    expect(result.succeeded).toHaveLength(1);
+
+    // keep_both fallback → conflict 파일 생성
+    expect(fs.has("test.conflict.md")).toBe(true);
+  });
+
+  test("conflict manual: 사용자 취소(null) → keep_both fallback", async () => {
+    const localData = new TextEncoder().encode("local version");
+    const remoteData = new TextEncoder().encode("remote version");
+
+    await fs.write("test.md", localData);
+    await remote.upload("test.md", remoteData);
+
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: {
+        type: "conflict",
+        localHash: dropboxContentHash(localData),
+        remoteHash: dropboxContentHash(remoteData),
+      },
+    });
+
+    const result = await executePlan(plan, {
+      ...deps,
+      conflictStrategy: "manual",
+      conflictResolver: async () => null,
+    });
+    expect(result.succeeded).toHaveLength(1);
+
+    // keep_both fallback → conflict 파일 생성
+    expect(fs.has("test.conflict.md")).toBe(true);
+  });
 });
 
 // ── makeConflictPath ──

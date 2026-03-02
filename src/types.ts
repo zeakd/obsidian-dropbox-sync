@@ -93,3 +93,14 @@ export interface DownloadResult {
   data: Uint8Array;
   metadata: RemoteEntry;
 }
+
+/** Dropbox rev 충돌 에러 */
+export class RevConflictError extends Error {
+  constructor(
+    message: string,
+    public readonly currentRev: string,
+  ) {
+    super(message);
+    this.name = "RevConflictError";
+  }
+}

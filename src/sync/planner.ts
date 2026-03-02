@@ -21,17 +21,24 @@ export interface RemoteState {
   deleted: boolean;
 }
 
+export interface ClassifyOptions {
+  /** 로컬에서 삭제 이벤트가 기록되었는지 */
+  localDeleteIntended?: boolean;
+}
+
 /**
  * 단일 파일의 동기화 액션을 결정하는 순수 함수.
  *
  * 판단 기준: content_hash와 base(마지막 동기화 시점) 비교
  * - local/remote가 null이면 해당 측에 파일 없음
  * - base가 null이면 이전 동기화 기록 없음
+ * - localDeleteIntended: true일 때만 부재→deleteRemote. 미지정이면 부재→download(안전)
  */
 export function classifyChange(
   local: LocalState | null,
   remote: RemoteState | null,
   base: SyncEntry | null,
+  options?: ClassifyOptions,
 ): SyncAction {
   const localExists = local !== null;
   const remoteExists = remote !== null && !remote.deleted;
@@ -86,8 +93,12 @@ export function classifyChange(
       if (remote.hash !== base.baseRemoteHash) {
         return { type: "download", reason: "remote_modified_local_deleted" };
       }
-      // base에 있었고 remote 미변경 → 로컬에서 삭제됨
-      return { type: "deleteRemote", reason: "deleted_on_local" };
+      // base에 있었고 remote 미변경 → 삭제 의도 확인
+      if (options?.localDeleteIntended) {
+        return { type: "deleteRemote", reason: "deleted_on_local" };
+      }
+      // 삭제 의도 없음 → 로컬에서 빠진 파일 복구
+      return { type: "download", reason: "missing_local_restored" };
     }
     // base 없음 → 새 원격 파일
     return { type: "download", reason: "new_remote" };
@@ -95,6 +106,11 @@ export function classifyChange(
 
   // Case 4: 양쪽 모두 없음
   return { type: "noop", reason: "both_absent" };
+}
+
+export interface PlanOptions {
+  /** 로컬에서 의도적으로 삭제된 경로 (pathLower) */
+  localDeletedPaths?: Set<string>;
 }
 
 /**
@@ -107,6 +123,7 @@ export function createPlan(
   localFiles: FileInfo[],
   remoteEntries: RemoteEntry[],
   baseEntries: SyncEntry[],
+  options?: PlanOptions,
 ): SyncPlan {
   // pathLower 기준으로 맵 구성
   const localMap = new Map<string, FileInfo>();
@@ -158,7 +175,10 @@ export function createPlan(
         }
       : null;
 
-    const action = classifyChange(localState, remoteState, baseEntry);
+    const classifyOpts: ClassifyOptions = {
+      localDeleteIntended: options?.localDeletedPaths?.has(pathLower),
+    };
+    const action = classifyChange(localState, remoteState, baseEntry, classifyOpts);
 
     if (action.type === "noop") {
       stats.noop++;
