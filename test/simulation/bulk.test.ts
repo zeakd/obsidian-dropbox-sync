@@ -121,4 +121,22 @@ describe("대량 파일 시나리오", () => {
 
     await sim.assertAllConsistent();
   });
+
+  test("concurrency=3: 100개 파일 병렬 동기화", async () => {
+    const sim2 = new SyncSimulator();
+    const A2 = sim2.addDevice("A", { concurrency: 3 });
+    const B2 = sim2.addDevice("B", { concurrency: 3 });
+
+    for (let i = 0; i < 100; i++) {
+      await A2.editFile(`file-${i}.md`, `content ${i}`);
+    }
+
+    await A2.sync();
+    await B2.sync();
+
+    for (let i = 0; i < 100; i++) {
+      expect(B2.hasFile(`file-${i}.md`)).toBe(true);
+      expect(await B2.readFile(`file-${i}.md`)).toBe(`content ${i}`);
+    }
+  });
 });

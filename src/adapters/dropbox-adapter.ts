@@ -311,6 +311,9 @@ export class DropboxAdapter implements RemoteStorage {
   }
 
   private parseError(status: number, text: string): Error {
+    if (status === 401) {
+      return new DropboxAuthError(`Token expired or revoked: ${text.slice(0, 200)}`);
+    }
     return new Error(`Dropbox API error ${status}: ${text.slice(0, 200)}`);
   }
 }
@@ -329,5 +332,13 @@ export class DropboxCursorResetError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "DropboxCursorResetError";
+  }
+}
+
+/** 401 토큰 만료/revoke 에러 */
+export class DropboxAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DropboxAuthError";
   }
 }

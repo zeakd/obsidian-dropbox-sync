@@ -79,6 +79,8 @@ export interface SyncPlan {
 export interface SyncResult {
   succeeded: SyncPlanItem[];
   failed: { item: SyncPlanItem; error: Error }[];
+  /** 활성 파일 보호로 건너뛴 항목 */
+  deferred: SyncPlanItem[];
 }
 
 /** 원격 변경 목록 응답 */
@@ -92,6 +94,17 @@ export interface ListChangesResult {
 export interface DownloadResult {
   data: Uint8Array;
   metadata: RemoteEntry;
+}
+
+/** Dropbox 경로 검증 실패 에러 */
+export class PathValidationError extends Error {
+  constructor(
+    public readonly path: string,
+    public readonly reason: string,
+  ) {
+    super(`Invalid Dropbox path "${path}": ${reason}`);
+    this.name = "PathValidationError";
+  }
 }
 
 /** Dropbox rev 충돌 에러 */

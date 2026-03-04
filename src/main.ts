@@ -10,7 +10,7 @@ import { StatusBar } from "./ui/status-bar";
 import { ConflictModal } from "./ui/conflict-modal";
 import { DeleteConfirmModal } from "./ui/delete-confirm-modal";
 import { VaultAdapter } from "./adapters/vault-adapter";
-import { DropboxAdapter } from "./adapters/dropbox-adapter";
+import { DropboxAdapter, DropboxAuthError } from "./adapters/dropbox-adapter";
 import { IndexedDBStore } from "./adapters/indexeddb-store";
 import { VaultFileStore } from "./adapters/vault-file-store";
 import { SyncEngine } from "./sync/engine";
@@ -33,6 +33,7 @@ export default class DropboxSyncPlugin extends Plugin {
   private store: SyncStateStore | null = null;
   private pendingAuth: { codeVerifier: string; state: string } | null = null;
   private syncTimerId: number | null = null;
+  private abortController: AbortController | null = null;
   onAuthChange: (() => void) | null = null;
 
   private async log(msg: string, data?: unknown): Promise<void> {
@@ -206,15 +207,22 @@ export default class DropboxSyncPlugin extends Plugin {
       return;
     }
 
+    // 네트워크 감지
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      await this.log("sync skipped: offline");
+      return;
+    }
+
     this.syncing = true;
+    this.abortController = new AbortController();
     this.statusBar?.update("syncing");
     await this.log("sync started");
 
     try {
       const engine = this.getOrCreateEngine();
-      const { plan, result, deletesSkipped } = await engine.runCycle();
+      const { plan, result, deletesSkipped, deferredCount } = await engine.runCycle(this.abortController.signal);
 
-      await this.log(`plan: ${plan.items.length} items, succeeded: ${result.succeeded.length}, failed: ${result.failed.length}, deletesSkipped: ${deletesSkipped ?? 0}`);
+      await this.log(`plan: ${plan.items.length} items, succeeded: ${result.succeeded.length}, failed: ${result.failed.length}, deletesSkipped: ${deletesSkipped ?? 0}, deferred: ${deferredCount ?? 0}`);
 
       // 삭제 로그 영속화 (성공한 항목 제거 후)
       this.persistDeleteLog(engine);
@@ -250,12 +258,30 @@ export default class DropboxSyncPlugin extends Plugin {
         this.statusBar?.update("success", "up to date");
       }
     } catch (e) {
+      // AbortError는 정상적인 중단
+      if (e instanceof Error && e.name === "AbortError") {
+        await this.log("sync aborted");
+        this.statusBar?.update("idle");
+        return;
+      }
+      // 401 토큰 만료/revoke
+      if (e instanceof DropboxAuthError) {
+        await this.log("auth error — token revoked", e);
+        this.settings.accessToken = "";
+        this.settings.tokenExpiry = 0;
+        await this.saveSettings();
+        this.syncEngine = null;
+        this.statusBar?.update("error", "auth expired");
+        new Notice("Dropbox Sync: Token expired. Please reconnect in settings.");
+        return;
+      }
       await this.log("sync error", e);
       const msg = (e as Error).message;
       this.statusBar?.update("error", "sync failed");
       new Notice(`Dropbox Sync error: ${msg}`);
     } finally {
       this.syncing = false;
+      this.abortController = null;
     }
   }
 
@@ -300,6 +326,7 @@ export default class DropboxSyncPlugin extends Plugin {
 
   /** UI "Stop Sync" 클릭 */
   async stopSync(): Promise<void> {
+    this.abortController?.abort();
     this.settings.syncEnabled = false;
     await this.saveSettings();
   }
@@ -389,6 +416,14 @@ export default class DropboxSyncPlugin extends Plugin {
         onDeleteGuardTriggered: async (guard) => {
           const modal = new DeleteConfirmModal(this.app, guard.deleteItems);
           return modal.waitForConfirmation();
+        },
+        isFileActive: (path) => {
+          const active = this.app.workspace.getActiveFile();
+          return active?.path === path;
+        },
+        concurrency: 3,
+        onProgress: (completed, total) => {
+          this.statusBar?.update("syncing", `syncing ${completed}/${total}`);
         },
       },
     );

@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from "vitest";
 import { executePlan, makeConflictPath } from "@/sync/executor";
-import type { ExecutorDeps } from "@/sync/executor";
+import type { ExecutorDeps, ExecutorConfig } from "@/sync/executor";
 import {
   MemoryFileSystem,
   MemoryRemoteStorage,
@@ -8,6 +8,7 @@ import {
 } from "@/adapters/memory";
 import { dropboxContentHash } from "@/hash";
 import type { SyncPlan, SyncPlanItem } from "@/types";
+import { PathValidationError } from "@/types";
 
 function mkPlan(...items: SyncPlanItem[]): SyncPlan {
   const stats = {
@@ -295,6 +296,192 @@ describe("executePlan", () => {
     const result = await executePlan(plan, deps);
     expect(result.succeeded).toHaveLength(0);
     expect(result.failed).toHaveLength(0);
+    expect(result.deferred).toHaveLength(0);
+  });
+
+  // ── path validation ──
+
+  test("upload: 금지 문자 경로 → PathValidationError로 실패", async () => {
+    await fs.write("file*.md", new TextEncoder().encode("content"));
+    const plan = mkPlan({
+      pathLower: "file*.md",
+      localPath: "file*.md",
+      action: { type: "upload", reason: "new_local" },
+    });
+
+    const result = await executePlan(plan, deps);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0].error).toBeInstanceOf(PathValidationError);
+  });
+
+  // ── 활성 파일 보호 ──
+
+  test("download: 활성 파일 → deferred로 건너뜀", async () => {
+    await remote.upload("active.md", new TextEncoder().encode("remote"));
+
+    const plan = mkPlan({
+      pathLower: "active.md",
+      localPath: "active.md",
+      action: { type: "download", reason: "new_remote" },
+    });
+
+    const result = await executePlan(plan, deps, {
+      isFileActive: (path) => path === "active.md",
+    });
+    expect(result.succeeded).toHaveLength(0);
+    expect(result.deferred).toHaveLength(1);
+    expect(result.deferred[0].localPath).toBe("active.md");
+    // 로컬에 다운로드되지 않음
+    expect(fs.has("active.md")).toBe(false);
+  });
+
+  test("conflict: 활성 파일 → deferred로 건너뜀", async () => {
+    await fs.write("editing.md", new TextEncoder().encode("local"));
+    await remote.upload("editing.md", new TextEncoder().encode("remote"));
+
+    const plan = mkPlan({
+      pathLower: "editing.md",
+      localPath: "editing.md",
+      action: {
+        type: "conflict",
+        localHash: "lh",
+        remoteHash: "rh",
+      },
+    });
+
+    const result = await executePlan(plan, deps, {
+      isFileActive: (path) => path === "editing.md",
+    });
+    expect(result.deferred).toHaveLength(1);
+    expect(fs.has("editing.conflict.md")).toBe(false);
+  });
+
+  test("upload: 활성 파일이어도 정상 업로드", async () => {
+    await fs.write("active.md", new TextEncoder().encode("local"));
+    const plan = mkPlan({
+      pathLower: "active.md",
+      localPath: "active.md",
+      action: { type: "upload", reason: "local_modified" },
+    });
+
+    const result = await executePlan(plan, deps, {
+      isFileActive: (path) => path === "active.md",
+    });
+    expect(result.succeeded).toHaveLength(1);
+    expect(result.deferred).toHaveLength(0);
+  });
+
+  test("isFileActive 없으면 모두 정상 실행", async () => {
+    await remote.upload("file.md", new TextEncoder().encode("remote"));
+    const plan = mkPlan({
+      pathLower: "file.md",
+      localPath: "file.md",
+      action: { type: "download", reason: "new_remote" },
+    });
+
+    const result = await executePlan(plan, deps);
+    expect(result.succeeded).toHaveLength(1);
+    expect(result.deferred).toHaveLength(0);
+  });
+
+  test("혼합: 활성+비활성 파일 동시 처리", async () => {
+    await remote.upload("active.md", new TextEncoder().encode("remote1"));
+    await remote.upload("other.md", new TextEncoder().encode("remote2"));
+
+    const plan = mkPlan(
+      {
+        pathLower: "active.md",
+        localPath: "active.md",
+        action: { type: "download", reason: "new_remote" },
+      },
+      {
+        pathLower: "other.md",
+        localPath: "other.md",
+        action: { type: "download", reason: "new_remote" },
+      },
+    );
+
+    const result = await executePlan(plan, deps, {
+      isFileActive: (path) => path === "active.md",
+    });
+    expect(result.succeeded).toHaveLength(1);
+    expect(result.deferred).toHaveLength(1);
+    expect(fs.has("other.md")).toBe(true);
+    expect(fs.has("active.md")).toBe(false);
+  });
+
+  // ── 병렬 실행 ──
+
+  test("concurrency=3: 결과가 순차 실행과 동일", async () => {
+    for (let i = 0; i < 10; i++) {
+      await fs.write(`file-${i}.md`, new TextEncoder().encode(`content ${i}`));
+    }
+
+    const items: SyncPlanItem[] = Array.from({ length: 10 }, (_, i) => ({
+      pathLower: `file-${i}.md`,
+      localPath: `file-${i}.md`,
+      action: { type: "upload" as const, reason: "new_local" },
+    }));
+    const plan = mkPlan(...items);
+
+    const result = await executePlan(plan, deps, { concurrency: 3 });
+    expect(result.succeeded).toHaveLength(10);
+    expect(result.failed).toHaveLength(0);
+
+    // 모두 원격에 업로드됨
+    for (let i = 0; i < 10; i++) {
+      expect(remote.has(`file-${i}.md`)).toBe(true);
+    }
+  });
+
+  test("onProgress 콜백: 완료 횟수 추적", async () => {
+    for (let i = 0; i < 5; i++) {
+      await fs.write(`f${i}.md`, new TextEncoder().encode(`c${i}`));
+    }
+
+    const items: SyncPlanItem[] = Array.from({ length: 5 }, (_, i) => ({
+      pathLower: `f${i}.md`,
+      localPath: `f${i}.md`,
+      action: { type: "upload" as const, reason: "new" },
+    }));
+
+    const progress: [number, number][] = [];
+    await executePlan(mkPlan(...items), deps, {
+      concurrency: 2,
+      onProgress: (completed, total) => progress.push([completed, total]),
+    });
+
+    expect(progress).toHaveLength(5);
+    expect(progress[progress.length - 1]).toEqual([5, 5]);
+    // total은 항상 5
+    expect(progress.every(([, t]) => t === 5)).toBe(true);
+  });
+
+  test("concurrency=1: 기본값, 순차 실행과 동일", async () => {
+    await fs.write("a.md", new TextEncoder().encode("a"));
+    await fs.write("b.md", new TextEncoder().encode("b"));
+
+    const plan = mkPlan(
+      { pathLower: "a.md", localPath: "a.md", action: { type: "upload", reason: "new" } },
+      { pathLower: "b.md", localPath: "b.md", action: { type: "upload", reason: "new" } },
+    );
+
+    const result = await executePlan(plan, deps); // concurrency 미지정 = 1
+    expect(result.succeeded).toHaveLength(2);
+  });
+
+  test("병렬 실행 중 일부 실패해도 나머지 계속", async () => {
+    await fs.write("ok.md", new TextEncoder().encode("ok"));
+    // bad.md는 로컬에 없어서 upload 시 실패
+
+    const plan = mkPlan(
+      { pathLower: "ok.md", localPath: "ok.md", action: { type: "upload", reason: "new" } },
+      { pathLower: "bad.md", localPath: "bad.md", action: { type: "upload", reason: "new" } },
+    );
+
+    const result = await executePlan(plan, deps, { concurrency: 2 });
+    expect(result.succeeded).toHaveLength(1);
+    expect(result.failed).toHaveLength(1);
   });
 
   // ── conflict: newest 전략 ──
@@ -321,8 +508,7 @@ describe("executePlan", () => {
       },
     });
 
-    const result = await executePlan(plan, {
-      ...deps,
+    const result = await executePlan(plan, deps, {
       conflictStrategy: "newest",
     });
     expect(result.succeeded).toHaveLength(1);
@@ -355,8 +541,7 @@ describe("executePlan", () => {
       },
     });
 
-    const result = await executePlan(plan, {
-      ...deps,
+    const result = await executePlan(plan, deps, {
       conflictStrategy: "newest",
     });
     expect(result.succeeded).toHaveLength(1);
@@ -386,8 +571,7 @@ describe("executePlan", () => {
       },
     });
 
-    const result = await executePlan(plan, {
-      ...deps,
+    const result = await executePlan(plan, deps, {
       conflictStrategy: "manual",
       conflictResolver: async () => "local",
     });
@@ -419,8 +603,7 @@ describe("executePlan", () => {
       },
     });
 
-    const result = await executePlan(plan, {
-      ...deps,
+    const result = await executePlan(plan, deps, {
       conflictStrategy: "manual",
       conflictResolver: async () => "remote",
     });
@@ -449,8 +632,7 @@ describe("executePlan", () => {
       },
     });
 
-    const result = await executePlan(plan, {
-      ...deps,
+    const result = await executePlan(plan, deps, {
       conflictStrategy: "manual",
       // conflictResolver 없음
     });
@@ -477,8 +659,7 @@ describe("executePlan", () => {
       },
     });
 
-    const result = await executePlan(plan, {
-      ...deps,
+    const result = await executePlan(plan, deps, {
       conflictStrategy: "manual",
       conflictResolver: async () => null,
     });

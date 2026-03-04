@@ -22,7 +22,7 @@ export class StatusBar {
         this.el.setText("Dropbox: idle");
         break;
       case "syncing":
-        this.el.setText("Dropbox: syncing...");
+        this.el.setText(detail ? `Dropbox: ${detail}` : "Dropbox: syncing...");
         break;
       case "success":
         this.el.setText(`Dropbox: ${detail ?? "synced"}`);
