@@ -85,7 +85,13 @@ export class VaultFileStore implements SyncStateStore {
 
   private async writeFile(path: string, content: string): Promise<void> {
     await this.ensureDir(".sync-state");
-    await this.vault.adapter.write(path, content);
+    const tmpPath = path + ".tmp";
+    await this.vault.adapter.write(tmpPath, content);
+    // atomic rename: 쓰기 완료 후에만 원본 교체
+    if (await this.vault.adapter.exists(path)) {
+      await this.vault.adapter.remove(path);
+    }
+    await this.vault.adapter.rename(tmpPath, path);
   }
 
   private async ensureDir(dir: string): Promise<void> {

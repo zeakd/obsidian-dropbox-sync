@@ -51,8 +51,9 @@ export async function executePlan(
   // 활성 파일 보호: 먼저 deferred를 분리
   const executable: SyncPlanItem[] = [];
   for (const item of plan.items) {
+    const t = item.action.type;
     if (
-      (item.action.type === "download" || item.action.type === "conflict") &&
+      (t === "download" || t === "conflict" || t === "deleteLocal") &&
       ctx.isFileActive?.(item.localPath)
     ) {
       deferred.push(item);

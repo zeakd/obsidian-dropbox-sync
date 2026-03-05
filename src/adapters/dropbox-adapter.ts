@@ -249,11 +249,17 @@ export class DropboxAdapter implements RemoteStorage {
     const expiry = this.config.getTokenExpiry();
     // 5분 전에 미리 갱신
     if (Date.now() > expiry - 5 * 60 * 1000) {
-      const result = await refreshAccessToken(
-        this.config.appKey,
-        this.config.getRefreshToken(),
-      );
-      this.config.onTokenRefreshed(result.accessToken, result.expiresAt);
+      try {
+        const result = await refreshAccessToken(
+          this.config.appKey,
+          this.config.getRefreshToken(),
+        );
+        this.config.onTokenRefreshed(result.accessToken, result.expiresAt);
+      } catch (e) {
+        throw new DropboxAuthError(
+          `Token refresh failed: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
     }
   }
 

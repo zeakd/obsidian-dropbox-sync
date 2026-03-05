@@ -24,6 +24,15 @@ function createMockVault() {
       mkdir: async (path: string) => {
         dirs.add(path);
       },
+      remove: async (path: string) => {
+        files.delete(path);
+      },
+      rename: async (from: string, to: string) => {
+        const content = files.get(from);
+        if (content === undefined) throw new Error(`File not found: ${from}`);
+        files.delete(from);
+        files.set(to, content);
+      },
     },
     // 테스트 헬퍼
     _files: files,
