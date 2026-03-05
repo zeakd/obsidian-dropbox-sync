@@ -4,6 +4,14 @@ import { PathValidationError, RevConflictError, type ConflictContext, type Downl
 import { validateDropboxPath } from "./path-validator";
 import { runWithConcurrency } from "./concurrency";
 
+/** skip된 conflict를 구분하기 위한 내부 에러 */
+class ConflictSkippedError extends Error {
+  constructor() {
+    super("conflict skipped");
+    this.name = "ConflictSkippedError";
+  }
+}
+
 export type ConflictStrategy = "keep_both" | "newest" | "manual";
 
 /** manual 전략에서 사용자 선택을 반환하는 콜백 */
@@ -112,7 +120,11 @@ export async function executePlan(
       await executeItem(item, ctx);
       succeeded.push(item);
     } catch (e) {
-      failed.push({ item, error: e as Error });
+      if (e instanceof ConflictSkippedError) {
+        deferred.push(item);
+      } else {
+        failed.push({ item, error: e as Error });
+      }
     }
     completed++;
     ctx.onProgress?.(completed, total);
@@ -322,8 +334,8 @@ async function handleConflictManual(
   const choice = await deps.conflictResolver(localPath, context);
 
   if (choice === "skip" || !choice) {
-    // 아무것도 안 함 → 다음 싱크에서 다시 conflict 감지
-    return;
+    // cursor 전진 방지 → 다음 싱크에서 다시 conflict 감지
+    throw new ConflictSkippedError();
   }
 
   if (choice === "local") {

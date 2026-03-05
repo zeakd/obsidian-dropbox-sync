@@ -665,9 +665,10 @@ describe("executePlan", () => {
       conflictStrategy: "manual",
       conflictResolver: async () => null,
     });
-    expect(result.succeeded).toHaveLength(1);
+    expect(result.succeeded).toHaveLength(0);
+    expect(result.deferred).toHaveLength(1);
 
-    // skip → conflict 파일 생성 안 됨, 상태 미갱신
+    // skip → conflict 파일 생성 안 됨, 상태 미갱신, cursor 전진 안 됨
     expect(fs.findByPrefix("test.conflict-")).toBeUndefined();
     // 로컬 파일 그대로
     expect(await fs.read("test.md")).toEqual(localData);
