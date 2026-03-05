@@ -45,6 +45,8 @@ export default class DropboxSyncPlugin extends Plugin {
   private debounceTimerId: number | null = null;
   private lastSyncTime: number | null = null;
   private ribbonEl: HTMLElement | null = null;
+  private longpollActive = false;
+  private longpollTimerId: number | null = null;
 
   private get logPath(): string {
     return `sync-debug-${this.settings.deviceId || "unknown"}.log`;
@@ -212,6 +214,7 @@ export default class DropboxSyncPlugin extends Plugin {
   onunload(): void {
     this.clearSyncTimer();
     this.clearDebounceTimer();
+    this.stopLongpoll();
     this.statusBar?.destroy();
   }
 
@@ -228,6 +231,79 @@ export default class DropboxSyncPlugin extends Plugin {
     if (this.debounceTimerId !== null) {
       window.clearTimeout(this.debounceTimerId);
       this.debounceTimerId = null;
+    }
+  }
+
+  // ── Longpoll (원격 변경 감지) ──
+
+  private scheduleLongpoll(): void {
+    if (!this.settings.syncEnabled || !this.store) return;
+    this.clearLongpollTimer();
+    this.longpollTimerId = window.setTimeout(() => {
+      this.longpollTimerId = null;
+      this.runLongpoll();
+    }, 1000);
+  }
+
+  private async runLongpoll(): Promise<void> {
+    if (!this.settings.syncEnabled || !this.store || this.syncing) return;
+
+    try {
+      const cursor = await this.store.getMeta("cursor");
+      if (!cursor) return;
+
+      this.longpollActive = true;
+
+      const resp = await requestUrl({
+        url: "https://notify.dropboxapi.com/2/files/list_folder/longpoll",
+        method: "POST",
+        contentType: "application/json",
+        body: JSON.stringify({ cursor, timeout: 30 }),
+        throw: false,
+      });
+
+      if (!this.longpollActive || !this.settings.syncEnabled) return;
+
+      if (resp.status !== 200) {
+        await this.log("longpoll error", resp.status);
+        return;
+      }
+
+      const result = resp.json as { changes: boolean; backoff?: number };
+
+      if (result.backoff) {
+        this.longpollTimerId = window.setTimeout(() => {
+          this.longpollTimerId = null;
+          if (result.changes) {
+            this.syncNow();
+          } else {
+            this.scheduleLongpoll();
+          }
+        }, result.backoff * 1000);
+        return;
+      }
+
+      if (result.changes) {
+        await this.syncNow();
+      } else {
+        this.scheduleLongpoll();
+      }
+    } catch (e) {
+      await this.log("longpoll error", e);
+    } finally {
+      this.longpollActive = false;
+    }
+  }
+
+  private stopLongpoll(): void {
+    this.clearLongpollTimer();
+    this.longpollActive = false;
+  }
+
+  private clearLongpollTimer(): void {
+    if (this.longpollTimerId !== null) {
+      window.clearTimeout(this.longpollTimerId);
+      this.longpollTimerId = null;
     }
   }
 
@@ -327,8 +403,11 @@ export default class DropboxSyncPlugin extends Plugin {
 
     this.syncing = true;
     this.abortController = new AbortController();
+    this.stopLongpoll();
     this.statusBar?.update("syncing");
     await this.log("sync started");
+
+    let cursorUpdated = false;
 
     try {
       const engine = this.getOrCreateEngine();
@@ -372,6 +451,10 @@ export default class DropboxSyncPlugin extends Plugin {
       } else {
         this.statusBar?.update("success", "up to date");
       }
+
+      if (result.failed.length === 0 && !deletesSkipped && !deferredCount) {
+        cursorUpdated = true;
+      }
     } catch (e) {
       // AbortError는 정상적인 중단
       if (e instanceof Error && e.name === "AbortError") {
@@ -399,6 +482,9 @@ export default class DropboxSyncPlugin extends Plugin {
       this.abortController = null;
       this.lastSyncTime = Date.now();
       await this.flushLogs();
+      if (cursorUpdated && this.settings.syncEnabled) {
+        this.scheduleLongpoll();
+      }
     }
   }
 
@@ -444,6 +530,7 @@ export default class DropboxSyncPlugin extends Plugin {
   /** UI "Stop Sync" 클릭 */
   async stopSync(): Promise<void> {
     this.abortController?.abort();
+    this.stopLongpoll();
     this.settings.syncEnabled = false;
     await this.saveSettings();
   }
@@ -532,7 +619,7 @@ export default class DropboxSyncPlugin extends Plugin {
 
     const vaultId = this.app.vault.getName();
 
-    const fs = new VaultAdapter(this.app.vault);
+    const fs = new VaultAdapter(this.app.vault, this.settings.excludePatterns);
     const remote = new DropboxAdapter({
       appKey: getEffectiveAppKey(this.settings),
       remotePath: getEffectiveRemotePath(this.settings),
@@ -567,6 +654,7 @@ export default class DropboxSyncPlugin extends Plugin {
           const active = this.app.workspace.getActiveFile();
           return active?.path === path;
         },
+        excludePatterns: this.settings.excludePatterns,
         concurrency: 3,
         onProgress: (completed, total) => {
           this.statusBar?.update("syncing", `syncing ${completed}/${total}`);

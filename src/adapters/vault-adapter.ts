@@ -2,6 +2,7 @@ import type { Vault, TFile, TAbstractFile } from "obsidian";
 import type { FileSystem } from "./interfaces";
 import type { FileInfo } from "../types";
 import { dropboxContentHashBrowser } from "../hash.browser";
+import { isExcluded } from "../exclude";
 
 /**
  * Obsidian Vault API를 FileSystem 인터페이스로 래핑.
@@ -10,7 +11,7 @@ import { dropboxContentHashBrowser } from "../hash.browser";
  * → 이벤트가 올바르게 발화되고, MetadataCache가 자동 업데이트됨.
  */
 export class VaultAdapter implements FileSystem {
-  constructor(private vault: Vault) {}
+  constructor(private vault: Vault, private excludePatterns: string[] = []) {}
 
   async read(path: string): Promise<Uint8Array> {
     const file = this.getFile(path);
@@ -82,9 +83,10 @@ export class VaultAdapter implements FileSystem {
   }
 
   private shouldExclude(path: string): boolean {
-    const excludes = [".trash/", ".sync-state/", ".DS_Store", "Thumbs.db"];
-    if (excludes.some((ex) => path.startsWith(ex) || path.includes(`/${ex}`))) return true;
+    const systemExcludes = [".trash/", ".sync-state/", ".DS_Store", "Thumbs.db"];
+    if (systemExcludes.some((ex) => path.startsWith(ex) || path.includes(`/${ex}`))) return true;
     if (path.startsWith("sync-debug-") && path.endsWith(".log")) return true;
+    if (isExcluded(path, this.excludePatterns)) return true;
     return false;
   }
 

@@ -368,6 +368,24 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Exclude patterns")
+      .setDesc("Files matching these patterns won't sync. One per line. Examples: *.pdf, attachments/, .obsidian/workspace*")
+      .addTextArea((text) => {
+        text
+          .setValue(this.plugin.settings.excludePatterns.join("\n"))
+          .onChange(async (value) => {
+            this.plugin.settings.excludePatterns = value
+              .split("\n")
+              .map((s) => s.trim())
+              .filter(Boolean);
+            await this.plugin.saveSettings();
+            this.plugin.resetEngine();
+          });
+        text.inputEl.rows = 4;
+        text.inputEl.style.width = "100%";
+      });
+
+    new Setting(containerEl)
       .setName("Sync interval (seconds)")
       .setDesc("Fallback interval when no file changes are detected.")
       .addSlider((slider) =>

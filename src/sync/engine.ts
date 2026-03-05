@@ -4,6 +4,7 @@ import { createPlan } from "./planner";
 import { executePlan, type ConflictStrategy, type ConflictResolver, type ExecutorConfig } from "./executor";
 import { checkDeleteGuard, type DeleteGuardResult } from "./guards";
 import { DropboxCursorResetError } from "../adapters/dropbox-adapter";
+import { isExcluded } from "../exclude";
 
 export interface SyncEngineDeps {
   fs: FileSystem;
@@ -20,6 +21,8 @@ export interface SyncEngineOptions {
   onDeleteGuardTriggered?: (guard: DeleteGuardResult) => Promise<boolean>;
   /** 파일이 현재 편집 중인지 확인. true면 download/conflict를 건너뛴다 */
   isFileActive?: (path: string) => boolean;
+  /** 파일 제외 패턴 */
+  excludePatterns?: string[];
   /** 병렬 실행 동시성. 기본값 1 (순차) */
   concurrency?: number;
   /** 항목 실행 완료 시마다 호출. (완료 수, 전체 수) */
@@ -133,6 +136,14 @@ export class SyncEngine {
         fullRemoteMap.delete(entry.pathLower);
       } else {
         fullRemoteMap.set(entry.pathLower, entry);
+      }
+    }
+
+    // 제외 패턴 적용
+    const excludePatterns = this.options.excludePatterns ?? [];
+    for (const key of fullRemoteMap.keys()) {
+      if (isExcluded(key, excludePatterns.map((p) => p.toLowerCase()))) {
+        fullRemoteMap.delete(key);
       }
     }
 
