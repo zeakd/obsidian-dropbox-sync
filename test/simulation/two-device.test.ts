@@ -54,10 +54,11 @@ describe("2기기 동기화 시나리오", () => {
 
     // B: 로컬에 자기 버전 유지, conflict 파일에 원격(A) 버전
     expect(B.hasFile("note.md")).toBe(true);
-    expect(B.hasFile("note.conflict.md")).toBe(true);
+    const conflictPath = B.findFileByPrefix("note.conflict-");
+    expect(conflictPath).toBeDefined();
 
     const bNote = await B.readFile("note.md");
-    const bConflict = await B.readFile("note.conflict.md");
+    const bConflict = await B.readFile(conflictPath!);
     // 둘 중 하나는 "version A", 하나는 "version B"
     const versions = new Set([bNote, bConflict]);
     expect(versions.has("version A")).toBe(true);

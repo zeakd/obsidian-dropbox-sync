@@ -62,6 +62,14 @@ export class MemoryFileSystem implements FileSystem {
     return this.files.has(path);
   }
 
+  /** 파일명이 prefix로 시작하는 첫 번째 경로 반환 */
+  findByPrefix(prefix: string): string | undefined {
+    for (const key of this.files.keys()) {
+      if (key.startsWith(prefix)) return key;
+    }
+    return undefined;
+  }
+
   getData(path: string): Uint8Array | undefined {
     return this.files.get(path)?.data;
   }

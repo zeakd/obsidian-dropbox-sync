@@ -117,6 +117,11 @@ export class Device {
     return this.fs.has(path);
   }
 
+  /** prefix로 시작하는 파일 경로 반환 */
+  findFileByPrefix(prefix: string): string | undefined {
+    return this.fs.findByPrefix(prefix);
+  }
+
   async getFileHash(path: string): Promise<string> {
     return this.fs.computeHash(path);
   }

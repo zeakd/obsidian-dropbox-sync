@@ -104,6 +104,7 @@ export class SyncEngine {
     let hasMore = changes.hasMore;
 
     while (hasMore) {
+      sig?.throwIfAborted();
       const more = await remote.listChanges(latestCursor);
       deltaEntries = deltaEntries.concat(more.entries);
       latestCursor = more.cursor;

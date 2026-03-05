@@ -245,21 +245,33 @@ export class DropboxAdapter implements RemoteStorage {
     throw new Error(`rpcCall failed after ${maxRetries} retries`);
   }
 
+  private refreshPromise: Promise<void> | null = null;
+
   private async ensureValidToken(): Promise<void> {
     const expiry = this.config.getTokenExpiry();
-    // 5분 전에 미리 갱신
     if (Date.now() > expiry - 5 * 60 * 1000) {
-      try {
-        const result = await refreshAccessToken(
-          this.config.appKey,
-          this.config.getRefreshToken(),
-        );
-        this.config.onTokenRefreshed(result.accessToken, result.expiresAt);
-      } catch (e) {
-        throw new DropboxAuthError(
-          `Token refresh failed: ${e instanceof Error ? e.message : String(e)}`,
-        );
+      if (!this.refreshPromise) {
+        this.refreshPromise = this.doRefreshToken();
       }
+      try {
+        await this.refreshPromise;
+      } finally {
+        this.refreshPromise = null;
+      }
+    }
+  }
+
+  private async doRefreshToken(): Promise<void> {
+    try {
+      const result = await refreshAccessToken(
+        this.config.appKey,
+        this.config.getRefreshToken(),
+      );
+      this.config.onTokenRefreshed(result.accessToken, result.expiresAt);
+    } catch (e) {
+      throw new DropboxAuthError(
+        `Token refresh failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 

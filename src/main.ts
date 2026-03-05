@@ -48,6 +48,8 @@ export default class DropboxSyncPlugin extends Plugin {
   private ribbonEl: HTMLElement | null = null;
   private longpollActive = false;
   private longpollTimerId: number | null = null;
+  private longpollErrorCount = 0;
+  private visibilityHandler: (() => void) | null = null;
 
   private get logPath(): string {
     return `sync-debug-${this.settings.deviceId || "unknown"}.log`;
@@ -305,6 +307,8 @@ export default class DropboxSyncPlugin extends Plugin {
         return;
       }
 
+      this.longpollErrorCount = 0;
+
       if (result.changes) {
         await this.syncNow();
       } else {
@@ -312,14 +316,50 @@ export default class DropboxSyncPlugin extends Plugin {
       }
     } catch (e) {
       await this.log("longpoll error", e);
+      this.longpollErrorCount++;
+      this.waitForVisibleThenReconnect();
     } finally {
       this.longpollActive = false;
     }
   }
 
+  private waitForVisibleThenReconnect(): void {
+    if (!this.settings.syncEnabled) return;
+    this.removeVisibilityHandler();
+
+    const delay = Math.min(1000 * Math.pow(2, this.longpollErrorCount - 1), 30000);
+
+    if (!document.hidden) {
+      this.longpollTimerId = window.setTimeout(() => {
+        this.longpollTimerId = null;
+        this.scheduleLongpoll();
+      }, delay);
+    } else {
+      this.visibilityHandler = () => {
+        if (!document.hidden) {
+          this.removeVisibilityHandler();
+          this.longpollTimerId = window.setTimeout(() => {
+            this.longpollTimerId = null;
+            this.scheduleLongpoll();
+          }, delay);
+        }
+      };
+      document.addEventListener("visibilitychange", this.visibilityHandler);
+    }
+  }
+
+  private removeVisibilityHandler(): void {
+    if (this.visibilityHandler) {
+      document.removeEventListener("visibilitychange", this.visibilityHandler);
+      this.visibilityHandler = null;
+    }
+  }
+
   private stopLongpoll(): void {
     this.clearLongpollTimer();
+    this.removeVisibilityHandler();
     this.longpollActive = false;
+    this.longpollErrorCount = 0;
   }
 
   private clearLongpollTimer(): void {

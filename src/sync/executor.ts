@@ -328,12 +328,12 @@ async function handleConflictOnUpload(
 }
 
 /**
- * 충돌 파일 경로 생성.
- * test.md → test.conflict.md
- * notes/doc.md → notes/doc.conflict.md
+ * 충돌 파일 경로 생성 (timestamp 포함으로 반복 충돌 시 덮어쓰기 방지).
+ * test.md → test.conflict-20260305T103500.md
  */
 export function makeConflictPath(path: string): string {
+  const ts = new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);
   const lastDot = path.lastIndexOf(".");
-  if (lastDot === -1) return `${path}.conflict`;
-  return `${path.slice(0, lastDot)}.conflict${path.slice(lastDot)}`;
+  if (lastDot === -1) return `${path}.conflict-${ts}`;
+  return `${path.slice(0, lastDot)}.conflict-${ts}${path.slice(lastDot)}`;
 }

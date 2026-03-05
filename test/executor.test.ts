@@ -95,8 +95,9 @@ describe("executePlan", () => {
     expect(result.succeeded).toHaveLength(1);
 
     // conflict 파일 생성됨
-    expect(fs.has("test.conflict.md")).toBe(true);
-    const conflictData = await fs.read("test.conflict.md");
+    const conflictPath = fs.findByPrefix("test.conflict-");
+    expect(conflictPath).toBeDefined();
+    const conflictData = await fs.read(conflictPath!);
     expect(conflictData).toEqual(remoteData);
 
     // 원본 로컬 파일 유지
@@ -208,8 +209,9 @@ describe("executePlan", () => {
     expect(await fs.read("test.md")).toEqual(localData);
 
     // 원격 버전 conflict 파일로 보존
-    expect(fs.has("test.conflict.md")).toBe(true);
-    expect(await fs.read("test.conflict.md")).toEqual(remoteData);
+    const conflictPath = fs.findByPrefix("test.conflict-");
+    expect(conflictPath).toBeDefined();
+    expect(await fs.read(conflictPath!)).toEqual(remoteData);
 
     // 원격은 로컬 버전으로 업데이트
     const dl = await remote.download("test.md");
@@ -639,7 +641,7 @@ describe("executePlan", () => {
     expect(result.succeeded).toHaveLength(1);
 
     // keep_both fallback → conflict 파일 생성
-    expect(fs.has("test.conflict.md")).toBe(true);
+    expect(fs.findByPrefix("test.conflict-")).toBeDefined();
   });
 
   test("conflict manual: 사용자 취소(null) → keep_both fallback", async () => {
@@ -666,7 +668,7 @@ describe("executePlan", () => {
     expect(result.succeeded).toHaveLength(1);
 
     // keep_both fallback → conflict 파일 생성
-    expect(fs.has("test.conflict.md")).toBe(true);
+    expect(fs.findByPrefix("test.conflict-")).toBeDefined();
   });
 });
 
@@ -674,20 +676,26 @@ describe("executePlan", () => {
 
 describe("makeConflictPath", () => {
   test("확장자가 있는 파일", () => {
-    expect(makeConflictPath("test.md")).toBe("test.conflict.md");
+    expect(makeConflictPath("test.md")).toMatch(
+      /^test\.conflict-\d{4}-\d{2}-\d{2}T\d{4}\.md$/,
+    );
   });
 
   test("경로가 있는 파일", () => {
-    expect(makeConflictPath("notes/doc.md")).toBe("notes/doc.conflict.md");
+    expect(makeConflictPath("notes/doc.md")).toMatch(
+      /^notes\/doc\.conflict-\d{4}-\d{2}-\d{2}T\d{4}\.md$/,
+    );
   });
 
   test("확장자 없는 파일", () => {
-    expect(makeConflictPath("README")).toBe("README.conflict");
+    expect(makeConflictPath("README")).toMatch(
+      /^README\.conflict-\d{4}-\d{2}-\d{2}T\d{4}$/,
+    );
   });
 
   test("여러 점이 있는 파일", () => {
-    expect(makeConflictPath("my.file.name.md")).toBe(
-      "my.file.name.conflict.md",
+    expect(makeConflictPath("my.file.name.md")).toMatch(
+      /^my\.file\.name\.conflict-\d{4}-\d{2}-\d{2}T\d{4}\.md$/,
     );
   });
 });
