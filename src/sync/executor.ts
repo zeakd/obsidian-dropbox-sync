@@ -7,10 +7,17 @@ import { runWithConcurrency } from "./concurrency";
 export type ConflictStrategy = "keep_both" | "newest" | "manual";
 
 /** manual 전략에서 사용자 선택을 반환하는 콜백 */
+export type ConflictResolverResult =
+  | "local"
+  | "remote"
+  | "skip"
+  | { type: "merged"; content: Uint8Array }
+  | null;
+
 export type ConflictResolver = (
   localPath: string,
   context?: ConflictContext,
-) => Promise<"local" | "remote" | { type: "merged"; content: Uint8Array } | null>;
+) => Promise<ConflictResolverResult>;
 
 export interface ExecutorDeps {
   fs: FileSystem;
@@ -313,6 +320,11 @@ async function handleConflictManual(
   }
 
   const choice = await deps.conflictResolver(localPath, context);
+
+  if (choice === "skip") {
+    // 아무것도 안 함 → 다음 싱크에서 다시 conflict 감지
+    return;
+  }
 
   if (!choice) {
     await handleConflictKeepBoth(item, deps);

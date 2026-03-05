@@ -1,7 +1,7 @@
 import { App, Modal, Platform, Setting } from "obsidian";
 import type { ConflictContext } from "../types";
 
-export type ConflictChoice = "local" | "remote" | MergedChoice;
+export type ConflictChoice = "local" | "remote" | "skip" | MergedChoice;
 
 export interface MergedChoice {
   type: "merged";
@@ -140,6 +140,12 @@ export class ConflictModal extends Modal {
       .addButton((btn) =>
         btn.setButtonText("Keep all remote").onClick(() => {
           this.choice = "remote";
+          this.close();
+        }),
+      )
+      .addExtraButton((btn) =>
+        btn.setIcon("clock").setTooltip("Later").onClick(() => {
+          this.choice = "skip";
           this.close();
         }),
       );
@@ -322,6 +328,12 @@ export class ConflictModal extends Modal {
       .addButton((btn) =>
         btn.setButtonText("Keep remote").onClick(() => {
           this.choice = "remote";
+          this.close();
+        }),
+      )
+      .addExtraButton((btn) =>
+        btn.setIcon("clock").setTooltip("Later").onClick(() => {
+          this.choice = "skip";
           this.close();
         }),
       );
