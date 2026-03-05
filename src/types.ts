@@ -111,6 +111,8 @@ export class PathValidationError extends Error {
 export interface ConflictContext {
   localContent?: string;
   remoteContent?: string;
+  localData?: Uint8Array;
+  remoteData?: Uint8Array;
   localSize?: number;
   remoteSize?: number;
   remoteMtime?: number;

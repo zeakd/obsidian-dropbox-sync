@@ -285,6 +285,9 @@ async function handleConflictManual(
     const decoder = new TextDecoder();
     context.localContent = decoder.decode(localData);
     context.remoteContent = decoder.decode(result.data);
+  } else {
+    context.localData = localData;
+    context.remoteData = result.data;
   }
 
   const choice = await deps.conflictResolver(localPath, context);
