@@ -1004,24 +1004,23 @@ export default class DropboxSyncPlugin extends Plugin {
 
 /**
  * 로컬 텍스트를 기반으로 "리모트에서 수정된" 시뮬레이션 버전 생성.
- * 일부 줄을 변경/추가/삭제하여 자연스러운 conflict 상황을 만든다.
+ * 문서의 1/4, 1/2, 3/4 지점에서 각 1줄만 변경하여 현실적인 conflict를 만든다.
  */
 function simulateRemoteEdit(text: string): string {
   const lines = text.split("\n");
-  const result: string[] = [];
+  if (lines.length < 3) return text + "\n(remote edit)";
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  const result = [...lines];
+  const targets = [0.25, 0.5, 0.75];
 
-    // ~20% 확률로 줄 변형
-    if (line.trim().length > 0 && i % 5 === 2) {
-      result.push(line + " (edited on another device)");
-    } else if (i % 7 === 0 && line.trim().length > 0) {
-      // 줄 앞에 추가
-      result.push("<!-- remote addition -->");
-      result.push(line);
-    } else {
-      result.push(line);
+  for (const ratio of targets) {
+    const idx = Math.floor(lines.length * ratio);
+    // 비어있지 않은 줄을 찾아서 수정
+    for (let j = idx; j < lines.length; j++) {
+      if (result[j].trim().length > 0) {
+        result[j] = "[remote] " + result[j];
+        break;
+      }
     }
   }
 
