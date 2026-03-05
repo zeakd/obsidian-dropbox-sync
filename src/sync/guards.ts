@@ -1,7 +1,5 @@
 import type { DeleteGuardResult, SyncPlan } from "../types";
 
-export type { DeleteGuardResult } from "../types";
-
 /**
  * 대량 삭제 가드. 삭제 개수가 임계값을 초과하면 차단.
  *

@@ -17,7 +17,7 @@ describe("LogManager", () => {
 
   beforeEach(() => {
     storage = createStorage();
-    logger = new LogManager(storage, () => "test.log");
+    logger = new LogManager(storage, () => "test.log", { consoleOutput: false });
   });
 
   test("log + flush → 파일에 기록", async () => {
@@ -30,7 +30,7 @@ describe("LogManager", () => {
   });
 
   test("flushSize 도달 시 자동 flush", async () => {
-    const small = new LogManager(storage, () => "test.log", 200, 3);
+    const small = new LogManager(storage, () => "test.log", { maxLines: 200, flushSize: 3, consoleOutput: false });
     await small.log("a");
     await small.log("b");
     expect(storage.files.has("test.log")).toBe(false);
@@ -42,7 +42,7 @@ describe("LogManager", () => {
   });
 
   test("maxLines 초과 시 오래된 로그 삭제", async () => {
-    const tiny = new LogManager(storage, () => "test.log", 5, 1);
+    const tiny = new LogManager(storage, () => "test.log", { maxLines: 5, flushSize: 1, consoleOutput: false });
     for (let i = 0; i < 10; i++) {
       await tiny.log(`line-${i}`);
     }
@@ -103,7 +103,7 @@ describe("LogManager", () => {
 
   test("logPath 동적 변경 반영", async () => {
     let path = "a.log";
-    const dynamic = new LogManager(storage, () => path);
+    const dynamic = new LogManager(storage, () => path, { consoleOutput: false });
     await dynamic.log("msg-a");
     await dynamic.flush();
     expect(storage.files.has("a.log")).toBe(true);

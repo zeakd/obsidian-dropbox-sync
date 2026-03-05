@@ -11,8 +11,6 @@ import {
 } from "./conflict-handlers";
 import type { ConflictHandlerDeps } from "./conflict-handlers";
 
-export type { ConflictStrategy, ConflictResolver, ConflictResolverResult } from "../types";
-
 export interface ExecutorDeps {
   fs: FileSystem;
   remote: RemoteStorage;

@@ -10,15 +10,36 @@ export interface LogStorage {
  *
  * 버퍼링하여 디스크 쓰기를 줄이고, 최대 줄 수를 초과하면 오래된 로그를 삭제한다.
  */
+export interface LogManagerOptions {
+  maxLines?: number;
+  flushSize?: number;
+  /** false로 설정하면 console.log 출력을 억제 */
+  consoleOutput?: boolean;
+}
+
 export class LogManager {
   private buffer: string[] = [];
+  private maxLines: number;
+  private flushSize: number;
+  private consoleOutput: boolean;
 
   constructor(
     private storage: LogStorage,
     private getLogPath: () => string,
-    private maxLines = 200,
-    private flushSize = 10,
-  ) {}
+    options?: LogManagerOptions | number,
+    flushSize?: number,
+  ) {
+    if (typeof options === "number") {
+      // 하위 호환: (storage, getLogPath, maxLines, flushSize)
+      this.maxLines = options;
+      this.flushSize = flushSize ?? 10;
+      this.consoleOutput = true;
+    } else {
+      this.maxLines = options?.maxLines ?? 200;
+      this.flushSize = options?.flushSize ?? 10;
+      this.consoleOutput = options?.consoleOutput ?? true;
+    }
+  }
 
   async log(msg: string, data?: unknown): Promise<void> {
     const ts = new Date().toISOString();
@@ -26,7 +47,7 @@ export class LogManager {
       ? `${data.name}: ${data.message}` + (data.stack ? `\n${data.stack}` : "")
       : data !== undefined ? JSON.stringify(data) : "";
     const line = detail ? `[${ts}] ${msg} ${detail}` : `[${ts}] ${msg}`;
-    console.log("[Dropbox Sync]", msg, data ?? "");
+    if (this.consoleOutput) console.log("[Dropbox Sync]", msg, data ?? "");
     this.buffer.push(line);
     if (this.buffer.length >= this.flushSize) {
       await this.flush();

@@ -1,7 +1,6 @@
 import { dropboxContentHashBrowser } from "../hash.browser";
 import type { FileSystem, RemoteStorage, SyncStateStore } from "../adapters/interfaces";
-import type { ConflictContext, DownloadResult, SyncPlanItem } from "../types";
-import type { ConflictResolver, ConflictStrategy } from "../types";
+import type { ConflictContext, ConflictResolver, ConflictStrategy, DownloadResult, SyncPlanItem } from "../types";
 
 /** skip된 conflict를 구분하기 위한 내부 에러 */
 export class ConflictSkippedError extends Error {
@@ -176,9 +175,6 @@ export function dispatchConflict(
   const strategy = deps.conflictStrategy ?? "keep_both";
   return CONFLICT_HANDLERS[strategy](item, deps);
 }
-
-/** @deprecated dispatchConflict 사용 */
-export const handleConflictOnUpload = dispatchConflict;
 
 /**
  * 충돌 파일 경로 생성 (timestamp 포함으로 반복 충돌 시 덮어쓰기 방지).

@@ -17,7 +17,7 @@ import { VaultAdapter } from "./adapters/vault-adapter";
 import { DropboxAdapter, DropboxAuthError } from "./adapters/dropbox-adapter";
 import { IndexedDBStore } from "./adapters/indexeddb-store";
 import { VaultFileStore } from "./adapters/vault-file-store";
-import type { ConflictContext, DeleteGuardResult } from "./types";
+import type { ConflictContext, DeleteGuardResult, SyncResult } from "./types";
 import type { RemoteStorage, SyncStateStore } from "./adapters/interfaces";
 import { DesktopAuth } from "./auth/desktop-auth";
 import { LongpollManager } from "./sync/longpoll";
@@ -50,7 +50,11 @@ export default class DropboxSyncPlugin extends Plugin {
   private engineMgr: EngineManager | null = null;
 
   private log(msg: string, data?: unknown): Promise<void> {
-    return this.logger!.log(msg, data);
+    if (!this.logger) {
+      console.log("[Dropbox Sync]", msg, data ?? "");
+      return Promise.resolve();
+    }
+    return this.logger.log(msg, data);
   }
 
   // ── Lifecycle ──
@@ -214,7 +218,7 @@ export default class DropboxSyncPlugin extends Plugin {
       this.syncing = false;
       this.abortController = null;
       this.lastSyncTime = Date.now();
-      await this.logger!.flush();
+      await this.logger?.flush();
       if (cursorUpdated && this.settings.syncEnabled) {
         this.longpoll?.schedule();
       }
@@ -273,7 +277,7 @@ export default class DropboxSyncPlugin extends Plugin {
   }
 
   async readLogs(): Promise<string> {
-    return this.logger!.read();
+    return this.logger?.read() ?? "(no logs)";
   }
 
   // ── Private: Engine ──
@@ -495,10 +499,7 @@ export default class DropboxSyncPlugin extends Plugin {
     this.app.setting?.openTabById(this.manifest.id);
   }
 
-  private reportSyncResult(
-    result: { succeeded: { action: { type: string } }[]; failed: { item: { action: { type: string }; localPath: string }; error: Error }[] },
-    deletesSkipped?: number,
-  ): void {
+  private reportSyncResult(result: SyncResult, deletesSkipped?: number): void {
     if (result.failed.length > 0) {
       for (const f of result.failed) {
         this.log(`FAIL ${f.item.action.type} ${f.item.localPath}`, f.error);
