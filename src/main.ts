@@ -12,6 +12,7 @@ import { ConflictModal } from "./ui/conflict-modal";
 import { DeleteConfirmModal } from "./ui/delete-confirm-modal";
 import { LogViewerModal } from "./ui/log-viewer-modal";
 import { SyncStatusModal } from "./ui/sync-status-modal";
+import { OnboardingModal } from "./ui/onboarding-modal";
 import { VaultAdapter } from "./adapters/vault-adapter";
 import { DropboxAdapter, DropboxAuthError } from "./adapters/dropbox-adapter";
 import { IndexedDBStore } from "./adapters/indexeddb-store";
@@ -208,6 +209,22 @@ export default class DropboxSyncPlugin extends Plugin {
       }
 
       this.applySyncState();
+
+      // 첫 실행 시 온보딩
+      if (!this.settings.onboardingDone) {
+        this.settings.onboardingDone = true;
+        await this.saveSettings();
+        if (!this.settings.refreshToken) {
+          new OnboardingModal(this.app, {
+            onOpenSettings: () => {
+              // @ts-expect-error — Obsidian internal API
+              this.app.setting?.open();
+              // @ts-expect-error — Obsidian internal API
+              this.app.setting?.openTabById(this.manifest.id);
+            },
+          }).open();
+        }
+      }
     });
   }
 

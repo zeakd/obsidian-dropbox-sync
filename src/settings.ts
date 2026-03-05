@@ -18,6 +18,7 @@ export interface PluginSettings {
   excludePatterns: string[];
   deviceId: string;
   syncOnCreateDeleteRename: boolean;
+  onboardingDone: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -35,6 +36,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   excludePatterns: [".obsidian/workspace*"],
   deviceId: "",
   syncOnCreateDeleteRename: false,
+  onboardingDone: false,
 };
 
 export function generateDeviceId(): string {
