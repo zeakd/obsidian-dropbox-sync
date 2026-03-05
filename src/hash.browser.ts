@@ -10,22 +10,14 @@ export async function dropboxContentHashBrowser(
 ): Promise<string> {
   const blockHashes: ArrayBuffer[] = [];
 
-  if (data.length === 0) {
-    const emptyHash = await crypto.subtle.digest(
-      "SHA-256",
-      new ArrayBuffer(0),
-    );
-    blockHashes.push(emptyHash);
-  } else {
-    for (let offset = 0; offset < data.length; offset += BLOCK_SIZE) {
-      const end = Math.min(offset + BLOCK_SIZE, data.length);
-      const block = data.buffer.slice(
-        data.byteOffset + offset,
-        data.byteOffset + end,
-      ) as ArrayBuffer;
-      const hash = await crypto.subtle.digest("SHA-256", block);
-      blockHashes.push(hash);
-    }
+  for (let offset = 0; offset < data.length; offset += BLOCK_SIZE) {
+    const end = Math.min(offset + BLOCK_SIZE, data.length);
+    const block = data.buffer.slice(
+      data.byteOffset + offset,
+      data.byteOffset + end,
+    ) as ArrayBuffer;
+    const hash = await crypto.subtle.digest("SHA-256", block);
+    blockHashes.push(hash);
   }
 
   const totalLength = blockHashes.reduce((sum, h) => sum + h.byteLength, 0);

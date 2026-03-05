@@ -16,16 +16,11 @@ const BLOCK_SIZE = 4 * 1024 * 1024; // 4MB
 export function dropboxContentHash(data: Uint8Array): string {
   const blockHashes: Buffer[] = [];
 
-  if (data.length === 0) {
-    const emptyHash = createHash("sha256").update(Buffer.alloc(0)).digest();
-    blockHashes.push(emptyHash);
-  } else {
-    for (let offset = 0; offset < data.length; offset += BLOCK_SIZE) {
-      const end = Math.min(offset + BLOCK_SIZE, data.length);
-      const block = data.subarray(offset, end);
-      const hash = createHash("sha256").update(block).digest();
-      blockHashes.push(hash);
-    }
+  for (let offset = 0; offset < data.length; offset += BLOCK_SIZE) {
+    const end = Math.min(offset + BLOCK_SIZE, data.length);
+    const block = data.subarray(offset, end);
+    const hash = createHash("sha256").update(block).digest();
+    blockHashes.push(hash);
   }
 
   const concat = Buffer.concat(blockHashes);

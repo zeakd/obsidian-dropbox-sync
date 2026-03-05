@@ -298,7 +298,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
             this.codeVerifier = generateCodeVerifier();
             const challenge = await generateCodeChallenge(this.codeVerifier);
             const url = buildAuthUrl({ appKey, codeChallenge: challenge });
-            window.open(url);
+            window.location.href = url;
           }),
       );
 
