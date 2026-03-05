@@ -192,6 +192,7 @@ export class SyncEngine {
       signal: sig,
       concurrency: this.options.concurrency,
       onProgress: this.options.onProgress,
+      onConflictCount: this.options.onConflictCount,
     };
     const result = await executePlan(planToExecute, { fs, remote, store }, executorConfig);
 

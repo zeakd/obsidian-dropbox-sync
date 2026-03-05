@@ -39,6 +39,7 @@ export default class DropboxSyncPlugin extends Plugin {
   private syncing = false;
   private store: SyncStateStore | null = null;
   private remoteAdapter: RemoteStorage | null = null;
+  private pendingDeleteLog: string[] = [];
   private pendingAuth: { codeVerifier: string; state: string } | null = null;
   private syncTimerId: number | null = null;
   private abortController: AbortController | null = null;
@@ -592,10 +593,15 @@ export default class DropboxSyncPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+    this.resetEngine();
     this.applySyncState();
   }
 
   resetEngine(): void {
+    if (this.syncEngine) {
+      this.pendingDeleteLog = this.syncEngine.getDeleteLog();
+      this.persistDeleteLog(this.syncEngine);
+    }
     this.syncEngine = null;
   }
 
@@ -985,6 +991,13 @@ export default class DropboxSyncPlugin extends Plugin {
         },
       },
     );
+
+    // 설정 변경으로 엔진 재생성 시 deleteLog 복원
+    if (this.pendingDeleteLog.length > 0) {
+      this.syncEngine.restoreDeleteLog(this.pendingDeleteLog);
+      this.pendingDeleteLog = [];
+    }
+
     return this.syncEngine;
   }
 }
