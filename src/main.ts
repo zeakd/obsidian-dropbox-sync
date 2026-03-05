@@ -640,8 +640,8 @@ export default class DropboxSyncPlugin extends Plugin {
       { fs, remote, store: this.store },
       {
         conflictStrategy: this.settings.conflictStrategy,
-        conflictResolver: async (filePath) => {
-          const modal = new ConflictModal(this.app, filePath);
+        conflictResolver: async (filePath, context) => {
+          const modal = new ConflictModal(this.app, filePath, context);
           return modal.waitForChoice();
         },
         deleteProtection: this.settings.deleteProtection,
@@ -657,7 +657,8 @@ export default class DropboxSyncPlugin extends Plugin {
         excludePatterns: this.settings.excludePatterns,
         concurrency: 3,
         onProgress: (completed, total) => {
-          this.statusBar?.update("syncing", `syncing ${completed}/${total}`);
+          const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+          this.statusBar?.update("syncing", `${pct}% · ${completed}/${total}`);
         },
       },
     );

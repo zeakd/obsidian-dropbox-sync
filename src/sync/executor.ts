@@ -1,6 +1,6 @@
 import { dropboxContentHashBrowser } from "../hash.browser";
 import type { FileSystem, RemoteStorage, SyncStateStore } from "../adapters/interfaces";
-import { PathValidationError, RevConflictError, type DownloadResult, type SyncPlan, type SyncPlanItem, type SyncResult } from "../types";
+import { PathValidationError, RevConflictError, type ConflictContext, type DownloadResult, type SyncPlan, type SyncPlanItem, type SyncResult } from "../types";
 import { validateDropboxPath } from "./path-validator";
 import { runWithConcurrency } from "./concurrency";
 
@@ -9,6 +9,7 @@ export type ConflictStrategy = "keep_both" | "newest" | "manual";
 /** manual 전략에서 사용자 선택을 반환하는 콜백 */
 export type ConflictResolver = (
   localPath: string,
+  context?: ConflictContext,
 ) => Promise<"local" | "remote" | null>;
 
 export interface ExecutorDeps {
@@ -269,24 +270,35 @@ async function handleConflictManual(
     return;
   }
 
-  const choice = await deps.conflictResolver(localPath);
+  // 비교용 양쪽 데이터 미리 읽기
+  const localData = await fs.read(localPath);
+  const result = await downloadAndVerify(remote, localPath);
+
+  const context: ConflictContext = {
+    localSize: localData.length,
+    remoteSize: result.data.length,
+    remoteMtime: result.metadata.serverModified,
+  };
+
+  const isText = /\.(md|txt|json|css|js|ts|html|xml|yaml|yml|csv|ini|cfg|log|toml)$/i.test(localPath);
+  if (isText) {
+    const decoder = new TextDecoder();
+    context.localContent = decoder.decode(localData);
+    context.remoteContent = decoder.decode(result.data);
+  }
+
+  const choice = await deps.conflictResolver(localPath, context);
 
   if (!choice) {
-    // 사용자가 취소 → keep_both fallback
     await handleConflictKeepBoth(item, deps);
     return;
   }
 
   if (choice === "local") {
-    // 로컬 버전 유지 → 원격에 업로드
-    const localData = await fs.read(localPath);
     const localHash = await dropboxContentHashBrowser(localData);
     const entry = await remote.upload(localPath, localData);
-
     await updateSyncState(store, pathLower, localPath, localHash, entry.hash ?? localHash, entry.rev);
   } else {
-    // 원격 버전 선택 → 로컬에 다운로드
-    const result = await downloadAndVerify(remote, localPath);
     await fs.write(localPath, result.data, result.metadata.serverModified);
     await updateSyncState(store, pathLower, localPath, result.verifiedHash, result.verifiedHash, result.metadata.rev);
   }

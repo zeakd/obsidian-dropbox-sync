@@ -107,6 +107,15 @@ export class PathValidationError extends Error {
   }
 }
 
+/** Conflict 시 사용자에게 전달할 컨텍스트 */
+export interface ConflictContext {
+  localContent?: string;
+  remoteContent?: string;
+  localSize?: number;
+  remoteSize?: number;
+  remoteMtime?: number;
+}
+
 /** Dropbox rev 충돌 에러 */
 export class RevConflictError extends Error {
   constructor(
