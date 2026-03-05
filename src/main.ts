@@ -50,7 +50,7 @@ export default class DropboxSyncPlugin extends Plugin {
   private async log(msg: string, data?: unknown): Promise<void> {
     const ts = new Date().toISOString();
     const detail = data instanceof Error
-      ? data.stack ?? data.message
+      ? `${data.name}: ${data.message}` + (data.stack ? `\n${data.stack}` : "")
       : data !== undefined ? JSON.stringify(data) : "";
     const line = detail ? `[${ts}] ${msg} ${detail}` : `[${ts}] ${msg}`;
     console.log("[Dropbox Sync]", msg, data ?? "");
