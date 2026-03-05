@@ -11,6 +11,7 @@ import { StatusBar } from "./ui/status-bar";
 import { ConflictModal } from "./ui/conflict-modal";
 import { DeleteConfirmModal } from "./ui/delete-confirm-modal";
 import { LogViewerModal } from "./ui/log-viewer-modal";
+import { SyncStatusModal } from "./ui/sync-status-modal";
 import { VaultAdapter } from "./adapters/vault-adapter";
 import { DropboxAdapter, DropboxAuthError } from "./adapters/dropbox-adapter";
 import { IndexedDBStore } from "./adapters/indexeddb-store";
@@ -42,6 +43,8 @@ export default class DropboxSyncPlugin extends Plugin {
   onAuthChange: (() => void) | null = null;
   private logBuffer: string[] = [];
   private debounceTimerId: number | null = null;
+  private lastSyncTime: number | null = null;
+  private ribbonEl: HTMLElement | null = null;
 
   private get logPath(): string {
     return `sync-debug-${this.settings.deviceId || "unknown"}.log`;
@@ -103,6 +106,32 @@ export default class DropboxSyncPlugin extends Plugin {
       name: "Sync now",
       callback: () => this.syncNow(),
     });
+
+    this.addCommand({
+      id: "view-logs",
+      name: "View sync logs",
+      callback: () => this.showLogs(),
+    });
+
+    this.addCommand({
+      id: "toggle-sync",
+      name: "Toggle sync on/off",
+      callback: () => {
+        if (this.settings.syncEnabled) {
+          this.stopSync();
+        } else {
+          this.startSync();
+        }
+      },
+    });
+
+    // 리본 아이콘
+    this.ribbonEl = this.addRibbonIcon("refresh-cw", "Dropbox Sync", () => {
+      this.showStatusModal();
+    });
+
+    // 상태 바 클릭
+    this.statusBar?.onClick(() => this.showStatusModal());
 
     // 데스크톱: obsidian:// 프로토콜 핸들러 등록
     if (Platform.isDesktop) {
@@ -368,6 +397,7 @@ export default class DropboxSyncPlugin extends Plugin {
     } finally {
       this.syncing = false;
       this.abortController = null;
+      this.lastSyncTime = Date.now();
       await this.flushLogs();
     }
   }
@@ -460,6 +490,35 @@ export default class DropboxSyncPlugin extends Plugin {
     } catch {
       return null;
     }
+  }
+
+  private showStatusModal(): void {
+    new SyncStatusModal(
+      this.app,
+      {
+        status: this.statusBar?.lastStatus ?? "idle",
+        detail: this.statusBar?.lastDetail,
+        syncEnabled: this.settings.syncEnabled,
+        lastSyncTime: this.lastSyncTime,
+        deviceId: this.settings.deviceId,
+      },
+      {
+        onSyncNow: () => this.syncNow(),
+        onToggleSync: () => {
+          if (this.settings.syncEnabled) {
+            this.stopSync();
+          } else {
+            this.startSync();
+          }
+        },
+        onViewLogs: () => this.showLogs(),
+      },
+    ).open();
+  }
+
+  private async showLogs(): Promise<void> {
+    const content = await this.readLogs();
+    new LogViewerModal(this.app, content, this.settings.deviceId).open();
   }
 
   private persistDeleteLog(engine: SyncEngine): void {
