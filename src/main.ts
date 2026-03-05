@@ -516,6 +516,7 @@ export default class DropboxSyncPlugin extends Plugin {
           "success",
           `${result.succeeded.length} synced`,
         );
+        new Notice(`Dropbox Sync: ${result.succeeded.length} file(s) synced.`);
       } else {
         this.statusBar?.update("success", "up to date");
       }
