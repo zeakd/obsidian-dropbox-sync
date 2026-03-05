@@ -1,6 +1,5 @@
 import { App, Modal, Setting } from "obsidian";
 import type { SyncStatus } from "./status-bar";
-import { LogViewerModal } from "./log-viewer-modal";
 
 export interface SyncStatusInfo {
   status: SyncStatus;
@@ -8,6 +7,7 @@ export interface SyncStatusInfo {
   syncEnabled: boolean;
   lastSyncTime: number | null;
   deviceId: string;
+  version: string;
 }
 
 export class SyncStatusModal extends Modal {
@@ -17,7 +17,7 @@ export class SyncStatusModal extends Modal {
     private actions: {
       onSyncNow: () => void;
       onToggleSync: () => void;
-      onViewLogs: () => Promise<void>;
+      onOpenSettings: () => void;
     },
   ) {
     super(app);
@@ -44,7 +44,7 @@ export class SyncStatusModal extends Modal {
     }
 
     contentEl.createEl("p", {
-      text: `Device: ${info.deviceId}`,
+      text: `Device: ${info.deviceId} · v${info.version}`,
       cls: "setting-item-description",
     });
 
@@ -68,10 +68,10 @@ export class SyncStatusModal extends Modal {
       )
       .addButton((btn) =>
         btn
-          .setButtonText("View Logs")
-          .onClick(async () => {
+          .setButtonText("Settings")
+          .onClick(() => {
             this.close();
-            await this.actions.onViewLogs();
+            this.actions.onOpenSettings();
           }),
       );
   }

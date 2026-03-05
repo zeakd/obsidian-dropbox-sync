@@ -30,27 +30,28 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
     const syncRunning = this.plugin.settings.syncEnabled;
 
     // ── Status bar ──
+    const version = `v${this.plugin.manifest.version}`;
     const status = new Setting(containerEl);
     status.settingEl.style.paddingTop = "28px";
     status.settingEl.style.paddingBottom = "28px";
     if (syncRunning) {
       status
-        .setName("Sync is running")
+        .setName(`Sync is running · ${version}`)
         .setDesc("Your vault is being synced with Dropbox.")
         .addButton((btn) =>
-          btn.setButtonText("🔄 Sync now").onClick(() => this.plugin.syncNow()),
+          btn.setButtonText("Sync now").onClick(() => this.plugin.syncNow()),
         );
     } else if (isConnected && hasSyncName) {
       status
-        .setName("Sync is stopped")
+        .setName(`Sync is stopped · ${version}`)
         .setDesc("Toggle sync on to start syncing.");
     } else if (isConnected) {
       status
-        .setName("Not syncing")
+        .setName(`Not syncing · ${version}`)
         .setDesc("Set a Vault ID to get started.");
     } else {
       status
-        .setName("Not connected")
+        .setName(`Not connected · ${version}`)
         .setDesc("Connect to Dropbox to set up sync.");
     }
 
@@ -355,14 +356,20 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
   }
 
   private renderSyncOptions(containerEl: HTMLElement): void {
+    // ── 기본 옵션 ──
     new Setting(containerEl)
-      .setName("Sync on file create/delete/rename")
-      .setDesc("Trigger sync when files are created, deleted, or renamed. File edits always trigger sync.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.syncOnCreateDeleteRename)
+      .setName("Conflict strategy")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("keep_both", "Keep both versions")
+          .addOption("newest", "Keep newest")
+          .addOption("manual", "Ask me")
+          .setValue(this.plugin.settings.conflictStrategy)
           .onChange(async (value) => {
-            this.plugin.settings.syncOnCreateDeleteRename = value;
+            this.plugin.settings.conflictStrategy = value as
+              | "keep_both"
+              | "newest"
+              | "manual";
             await this.plugin.saveSettings();
           }),
       );
@@ -385,6 +392,21 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
         text.inputEl.style.width = "100%";
       });
 
+    // ── Advanced ──
+    new Setting(containerEl).setName("Advanced").setHeading();
+
+    new Setting(containerEl)
+      .setName("Sync on file create/delete/rename")
+      .setDesc("Trigger sync when files are created, deleted, or renamed. File edits always trigger sync.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.syncOnCreateDeleteRename)
+          .onChange(async (value) => {
+            this.plugin.settings.syncOnCreateDeleteRename = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
     new Setting(containerEl)
       .setName("Sync interval (seconds)")
       .setDesc("Fallback interval when no file changes are detected.")
@@ -395,23 +417,6 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
           .setDynamicTooltip()
           .onChange(async (value) => {
             this.plugin.settings.syncInterval = value;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Conflict strategy")
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("keep_both", "Keep both versions")
-          .addOption("newest", "Keep newest")
-          .addOption("manual", "Ask me")
-          .setValue(this.plugin.settings.conflictStrategy)
-          .onChange(async (value) => {
-            this.plugin.settings.conflictStrategy = value as
-              | "keep_both"
-              | "newest"
-              | "manual";
             await this.plugin.saveSettings();
           }),
       );

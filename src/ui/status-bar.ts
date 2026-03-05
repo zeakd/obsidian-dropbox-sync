@@ -18,6 +18,13 @@ export class StatusBar {
     this.el.addEventListener("click", callback);
   }
 
+  onContextMenu(callback: (evt: MouseEvent) => void): void {
+    this.el.addEventListener("contextmenu", (evt) => {
+      evt.preventDefault();
+      callback(evt);
+    });
+  }
+
   update(status: SyncStatus, detail?: string): void {
     if (this.timerId) {
       clearTimeout(this.timerId);

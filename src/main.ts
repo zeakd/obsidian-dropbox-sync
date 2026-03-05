@@ -1,4 +1,4 @@
-import { Notice, Platform, Plugin, requestUrl, TFile } from "obsidian";
+import { Menu, Notice, Platform, Plugin, requestUrl, TFile } from "obsidian";
 import {
   DEFAULT_SETTINGS,
   generateDeviceId,
@@ -128,13 +128,18 @@ export default class DropboxSyncPlugin extends Plugin {
       },
     });
 
-    // 리본 아이콘
+    // 리본 아이콘 (좌클릭: 상태 모달, 우클릭: 컨텍스트 메뉴)
     this.ribbonEl = this.addRibbonIcon("refresh-cw", "Dropbox Sync", () => {
       this.showStatusModal();
     });
+    this.ribbonEl.addEventListener("contextmenu", (evt) => {
+      evt.preventDefault();
+      this.showContextMenu(evt);
+    });
 
-    // 상태 바 클릭
+    // 상태 바 (좌클릭: 상태 모달, 우클릭: 컨텍스트 메뉴)
     this.statusBar?.onClick(() => this.showStatusModal());
+    this.statusBar?.onContextMenu((evt) => this.showContextMenu(evt));
 
     // 데스크톱: obsidian:// 프로토콜 핸들러 등록
     if (Platform.isDesktop) {
@@ -605,6 +610,7 @@ export default class DropboxSyncPlugin extends Plugin {
         syncEnabled: this.settings.syncEnabled,
         lastSyncTime: this.lastSyncTime,
         deviceId: this.settings.deviceId,
+        version: this.manifest.version,
       },
       {
         onSyncNow: () => this.syncNow(),
@@ -615,14 +621,42 @@ export default class DropboxSyncPlugin extends Plugin {
             this.startSync();
           }
         },
-        onViewLogs: () => this.showLogs(),
+        onOpenSettings: () => this.openSettings(),
       },
     ).open();
+  }
+
+  private showContextMenu(evt: MouseEvent): void {
+    const menu = new Menu();
+    menu.addItem((item) =>
+      item.setTitle("Sync Now").setIcon("refresh-cw").onClick(() => this.syncNow()),
+    );
+    menu.addItem((item) =>
+      item
+        .setTitle(this.settings.syncEnabled ? "Stop Sync" : "Start Sync")
+        .setIcon(this.settings.syncEnabled ? "pause" : "play")
+        .onClick(() => {
+          if (this.settings.syncEnabled) this.stopSync();
+          else this.startSync();
+        }),
+    );
+    menu.addSeparator();
+    menu.addItem((item) =>
+      item.setTitle("Settings").setIcon("settings").onClick(() => this.openSettings()),
+    );
+    menu.showAtMouseEvent(evt);
   }
 
   private async showLogs(): Promise<void> {
     const content = await this.readLogs();
     new LogViewerModal(this.app, content, this.settings.deviceId).open();
+  }
+
+  private openSettings(): void {
+    // @ts-expect-error — Obsidian internal API
+    this.app.setting?.open();
+    // @ts-expect-error — Obsidian internal API
+    this.app.setting?.openTabById(this.manifest.id);
   }
 
   private persistDeleteLog(engine: SyncEngine): void {
