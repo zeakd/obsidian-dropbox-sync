@@ -8,7 +8,7 @@ import {
 } from "./settings";
 import { DropboxSyncSettingTab } from "./ui/settings-tab";
 import { StatusBar } from "./ui/status-bar";
-import { ConflictModal } from "./ui/conflict-modal";
+import { ConflictModal, type ConflictChoice } from "./ui/conflict-modal";
 import { DeleteConfirmModal } from "./ui/delete-confirm-modal";
 import { LogViewerModal } from "./ui/log-viewer-modal";
 import { SyncStatusModal } from "./ui/sync-status-modal";
@@ -125,6 +125,30 @@ export default class DropboxSyncPlugin extends Plugin {
       id: "demo-conflict",
       name: "Demo conflict modal",
       callback: () => this.showDemoConflict(),
+    });
+
+    this.addCommand({
+      id: "demo-conflict-current",
+      name: "Demo conflict (current file)",
+      callback: () => this.showDemoConflictCurrentFile(),
+    });
+
+    this.addCommand({
+      id: "demo-conflict-multi",
+      name: "Demo conflict (multi-file)",
+      callback: () => this.showDemoConflictMulti(),
+    });
+
+    this.addCommand({
+      id: "demo-conflict-image",
+      name: "Demo conflict (image)",
+      callback: () => this.showDemoConflictImage(),
+    });
+
+    this.addCommand({
+      id: "inject-conflict",
+      name: "Debug: Inject conflict on current file",
+      callback: () => this.injectConflict(),
     });
 
     this.addCommand({
@@ -770,6 +794,119 @@ export default class DropboxSyncPlugin extends Plugin {
     }
   }
 
+  private async showDemoConflictCurrentFile(): Promise<void> {
+    const active = this.app.workspace.getActiveFile();
+    if (!active) {
+      new Notice("No active file. Open a file first.");
+      return;
+    }
+
+    const local = await this.app.vault.read(active);
+    const remote = simulateRemoteEdit(local);
+
+    const modal = new ConflictModal(this.app, active.path, {
+      localContent: local,
+      remoteContent: remote,
+      localSize: new TextEncoder().encode(local).length,
+      remoteSize: new TextEncoder().encode(remote).length,
+      remoteMtime: Date.now() - 600000,
+    });
+    const choice = await modal.waitForChoice();
+    this.reportDemoChoice(active.path, choice);
+  }
+
+  private async showDemoConflictMulti(): Promise<void> {
+    const files = [
+      { path: "meeting-notes.md", localLines: ["# Meeting", "", "- Alice", "- Bob"], remoteLines: ["# Meeting", "", "- Alice", "- Charlie"] },
+      { path: "project-plan.md", localLines: ["# Plan", "", "Phase 1: Design", "Phase 2: Build"], remoteLines: ["# Plan", "", "Phase 1: Research", "Phase 2: Build", "Phase 3: Deploy"] },
+      { path: "daily-log.md", localLines: ["# Today", "", "Did code review.", "Fixed 3 bugs."], remoteLines: ["# Today", "", "Did code review.", "Fixed 5 bugs.", "Deployed to staging."] },
+    ];
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const local = f.localLines.join("\n");
+      const remote = f.remoteLines.join("\n");
+      const modal = new ConflictModal(this.app, f.path, {
+        localContent: local,
+        remoteContent: remote,
+        localSize: new TextEncoder().encode(local).length,
+        remoteSize: new TextEncoder().encode(remote).length,
+        remoteMtime: Date.now() - 3600000,
+      }, { index: i + 1, total: files.length });
+      const choice = await modal.waitForChoice();
+      this.reportDemoChoice(f.path, choice);
+    }
+    new Notice("Demo: All conflicts resolved.");
+  }
+
+  private showDemoConflictImage(): void {
+    const localSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#4a90d9"/><text x="100" y="105" text-anchor="middle" fill="white" font-size="16">Local v1</text></svg>`;
+    const remoteSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#d94a4a"/><text x="100" y="105" text-anchor="middle" fill="white" font-size="16">Remote v2</text></svg>`;
+    const localData = new TextEncoder().encode(localSvg);
+    const remoteData = new TextEncoder().encode(remoteSvg);
+
+    const modal = new ConflictModal(this.app, "diagram.svg", {
+      localData,
+      remoteData,
+      localSize: localData.length,
+      remoteSize: remoteData.length,
+      remoteMtime: Date.now() - 1800000,
+    });
+    modal.waitForChoice().then((choice) => this.reportDemoChoice("diagram.svg", choice));
+  }
+
+  private async injectConflict(): Promise<void> {
+    const active = this.app.workspace.getActiveFile();
+    if (!active) {
+      new Notice("No active file. Open a file first.");
+      return;
+    }
+    if (!this.remoteAdapter) {
+      this.getOrCreateEngine();
+    }
+    if (!this.remoteAdapter || !this.store) {
+      new Notice("Not connected to Dropbox.");
+      return;
+    }
+
+    try {
+      // 1. 현재 파일 읽기
+      const localContent = await this.app.vault.read(active);
+
+      // 2. 변형된 버전을 Dropbox에 업로드 (overwrite)
+      const remoteContent = simulateRemoteEdit(localContent);
+      const remoteData = new TextEncoder().encode(remoteContent);
+      await this.remoteAdapter.upload(active.path.toLowerCase(), remoteData);
+
+      // 3. 로컬 파일에 작은 수정 추가
+      const now = new Date().toLocaleTimeString();
+      const localEdited = localContent + `\n<!-- local edit at ${now} -->`;
+      await this.app.vault.modify(active, localEdited);
+
+      new Notice(
+        `Conflict injected on "${active.path}".\n` +
+        `Remote: modified version uploaded.\n` +
+        `Local: edit marker added.\n\n` +
+        `Run "Sync now" to trigger the conflict.`,
+        8000,
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      new Notice(`Inject failed: ${msg}`, 5000);
+    }
+  }
+
+  private reportDemoChoice(path: string, choice: ConflictChoice | null): void {
+    if (!choice) {
+      new Notice(`Demo [${path}]: skipped`);
+    } else if (typeof choice === "string") {
+      new Notice(`Demo [${path}]: "${choice}"`);
+    } else {
+      const text = new TextDecoder().decode(choice.content);
+      new Notice(`Demo [${path}]: merged (${text.split("\n").length} lines)`);
+    }
+  }
+
   private openSettings(): void {
     // @ts-expect-error — Obsidian internal API
     this.app.setting?.open();
@@ -850,4 +987,30 @@ export default class DropboxSyncPlugin extends Plugin {
     );
     return this.syncEngine;
   }
+}
+
+/**
+ * 로컬 텍스트를 기반으로 "리모트에서 수정된" 시뮬레이션 버전 생성.
+ * 일부 줄을 변경/추가/삭제하여 자연스러운 conflict 상황을 만든다.
+ */
+function simulateRemoteEdit(text: string): string {
+  const lines = text.split("\n");
+  const result: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // ~20% 확률로 줄 변형
+    if (line.trim().length > 0 && i % 5 === 2) {
+      result.push(line + " (edited on another device)");
+    } else if (i % 7 === 0 && line.trim().length > 0) {
+      // 줄 앞에 추가
+      result.push("<!-- remote addition -->");
+      result.push(line);
+    } else {
+      result.push(line);
+    }
+  }
+
+  return result.join("\n");
 }
