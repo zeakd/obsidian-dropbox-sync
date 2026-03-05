@@ -83,9 +83,9 @@ export class VaultAdapter implements FileSystem {
 
   private shouldExclude(path: string): boolean {
     const excludes = [".trash/", ".sync-state/", ".DS_Store", "Thumbs.db"];
-    return excludes.some(
-      (ex) => path.startsWith(ex) || path.includes(`/${ex}`),
-    );
+    if (excludes.some((ex) => path.startsWith(ex) || path.includes(`/${ex}`))) return true;
+    if (path.startsWith("sync-debug-") && path.endsWith(".log")) return true;
+    return false;
   }
 
   private async ensureParentDir(path: string): Promise<void> {

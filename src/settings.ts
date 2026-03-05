@@ -16,6 +16,7 @@ export interface PluginSettings {
   deleteThreshold: number;
   syncName: string;
   excludePatterns: string[];
+  deviceId: string;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -31,7 +32,17 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   deleteThreshold: 5,
   syncName: "",
   excludePatterns: [".obsidian/workspace*"],
+  deviceId: "",
 };
+
+export function generateDeviceId(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let id = "";
+  for (let i = 0; i < 4; i++) {
+    id += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return id;
+}
 
 /**
  * 유효한 App Key 결정: custom key > 빌트인 key > 기존 settings (하위 호환).

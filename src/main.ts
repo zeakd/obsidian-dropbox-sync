@@ -1,6 +1,7 @@
 import { Notice, Platform, Plugin, requestUrl, TFile } from "obsidian";
 import {
   DEFAULT_SETTINGS,
+  generateDeviceId,
   getEffectiveAppKey,
   getEffectiveRemotePath,
   type PluginSettings,
@@ -9,6 +10,7 @@ import { DropboxSyncSettingTab } from "./ui/settings-tab";
 import { StatusBar } from "./ui/status-bar";
 import { ConflictModal } from "./ui/conflict-modal";
 import { DeleteConfirmModal } from "./ui/delete-confirm-modal";
+import { LogViewerModal } from "./ui/log-viewer-modal";
 import { VaultAdapter } from "./adapters/vault-adapter";
 import { DropboxAdapter, DropboxAuthError } from "./adapters/dropbox-adapter";
 import { IndexedDBStore } from "./adapters/indexeddb-store";
@@ -24,6 +26,8 @@ import {
 } from "./adapters/dropbox-auth";
 
 const REDIRECT_URI = "obsidian://dropbox-sync";
+const MAX_LOG_LINES = 200;
+const LOG_BUFFER_FLUSH_SIZE = 10;
 
 export default class DropboxSyncPlugin extends Plugin {
   settings: PluginSettings = DEFAULT_SETTINGS;
@@ -35,25 +39,58 @@ export default class DropboxSyncPlugin extends Plugin {
   private syncTimerId: number | null = null;
   private abortController: AbortController | null = null;
   onAuthChange: (() => void) | null = null;
+  private logBuffer: string[] = [];
+
+  private get logPath(): string {
+    return `sync-debug-${this.settings.deviceId || "unknown"}.log`;
+  }
 
   private async log(msg: string, data?: unknown): Promise<void> {
     const ts = new Date().toISOString();
-    const line = data
-      ? `[${ts}] ${msg} ${data instanceof Error ? data.stack ?? data.message : JSON.stringify(data)}`
-      : `[${ts}] ${msg}`;
+    const detail = data instanceof Error
+      ? data.stack ?? data.message
+      : data !== undefined ? JSON.stringify(data) : "";
+    const line = detail ? `[${ts}] ${msg} ${detail}` : `[${ts}] ${msg}`;
     console.log("[Dropbox Sync]", msg, data ?? "");
+    this.logBuffer.push(line);
+    if (this.logBuffer.length >= LOG_BUFFER_FLUSH_SIZE) {
+      await this.flushLogs();
+    }
+  }
+
+  private async flushLogs(): Promise<void> {
+    if (this.logBuffer.length === 0) return;
+    const toWrite = this.logBuffer.splice(0);
     try {
-      const logPath = ".sync-debug.log";
       let existing = "";
-      if (await this.app.vault.adapter.exists(logPath)) {
-        existing = await this.app.vault.adapter.read(logPath);
+      if (await this.app.vault.adapter.exists(this.logPath)) {
+        existing = await this.app.vault.adapter.read(this.logPath);
       }
-      await this.app.vault.adapter.write(logPath, existing + line + "\n");
+      const lines = existing ? existing.split("\n").filter(Boolean) : [];
+      lines.push(...toWrite);
+      const trimmed = lines.slice(-MAX_LOG_LINES);
+      await this.app.vault.adapter.write(this.logPath, trimmed.join("\n") + "\n");
     } catch { /* ignore log write failures */ }
+  }
+
+  async readLogs(): Promise<string> {
+    // flush any buffered lines first
+    await this.flushLogs();
+    try {
+      if (await this.app.vault.adapter.exists(this.logPath)) {
+        return await this.app.vault.adapter.read(this.logPath);
+      }
+    } catch { /* ignore */ }
+    return "(no logs)";
   }
 
   async onload(): Promise<void> {
     await this.loadSettings();
+
+    if (!this.settings.deviceId) {
+      this.settings.deviceId = generateDeviceId();
+      await this.saveSettings();
+    }
 
     this.addSettingTab(new DropboxSyncSettingTab(this.app, this));
 
@@ -74,41 +111,43 @@ export default class DropboxSyncPlugin extends Plugin {
     }
 
     this.app.workspace.onLayoutReady(async () => {
-      // 삭제 로그 복원
-      const engine = this.getOrCreateEngine();
-      if (this.store) {
-        const saved = await this.store.getMeta("deleteLog");
-        if (saved) {
-          try {
-            const paths = JSON.parse(saved) as string[];
-            engine.restoreDeleteLog(paths);
-          } catch { /* ignore parse errors */ }
+      if (this.settings.syncName) {
+        // 삭제 로그 복원
+        const engine = this.getOrCreateEngine();
+        if (this.store) {
+          const saved = await this.store.getMeta("deleteLog");
+          if (saved) {
+            try {
+              const paths = JSON.parse(saved) as string[];
+              engine.restoreDeleteLog(paths);
+            } catch { /* ignore parse errors */ }
+          }
         }
+
+        // 삭제/이름변경 이벤트 추적
+        this.registerEvent(
+          this.app.vault.on("delete", (file) => {
+            if (this.syncing) return; // sync 중 삭제(deleteLocal 등)는 무시
+            if (file instanceof TFile) {
+              const pathLower = file.path.toLowerCase();
+              engine.trackDelete(pathLower);
+              this.persistDeleteLog(engine);
+            }
+          }),
+        );
+
+        this.registerEvent(
+          this.app.vault.on("rename", (file, oldPath) => {
+            if (this.syncing) return;
+            if (file instanceof TFile) {
+              // rename = 구경로 삭제 + 신경로 생성
+              const oldPathLower = oldPath.toLowerCase();
+              engine.trackDelete(oldPathLower);
+              this.persistDeleteLog(engine);
+            }
+          }),
+        );
       }
-
-      // 삭제/이름변경 이벤트 추적
-      this.registerEvent(
-        this.app.vault.on("delete", (file) => {
-          if (this.syncing) return; // sync 중 삭제(deleteLocal 등)는 무시
-          if (file instanceof TFile) {
-            const pathLower = file.path.toLowerCase();
-            engine.trackDelete(pathLower);
-            this.persistDeleteLog(engine);
-          }
-        }),
-      );
-
-      this.registerEvent(
-        this.app.vault.on("rename", (file, oldPath) => {
-          if (this.syncing) return;
-          if (file instanceof TFile) {
-            // rename = 구경로 삭제 + 신경로 생성
-            const oldPathLower = oldPath.toLowerCase();
-            engine.trackDelete(oldPathLower);
-            this.persistDeleteLog(engine);
-          }
-        }),
-      );
 
       this.applySyncState();
     });
@@ -238,8 +277,11 @@ export default class DropboxSyncPlugin extends Plugin {
           "error",
           `${result.failed.length} failed`,
         );
+        const firstErr = result.failed[0];
+        const errDetail = firstErr.error instanceof Error ? firstErr.error.message : String(firstErr.error);
         new Notice(
-          `Dropbox Sync: ${result.succeeded.length}/${total} succeeded, ${result.failed.length} failed.`,
+          `Dropbox Sync: ${result.failed.length} failed (${result.succeeded.length} ok)\n${firstErr.item.localPath}: ${errDetail.slice(0, 100)}`,
+          8000,
         );
       } else if (deletesSkipped && deletesSkipped > 0) {
         this.statusBar?.update(
@@ -282,6 +324,7 @@ export default class DropboxSyncPlugin extends Plugin {
     } finally {
       this.syncing = false;
       this.abortController = null;
+      await this.flushLogs();
     }
   }
 

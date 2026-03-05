@@ -7,6 +7,7 @@ import {
   buildAuthUrl,
   exchangeCodeForToken,
 } from "../adapters/dropbox-auth";
+import { LogViewerModal } from "./log-viewer-modal";
 
 export class DropboxSyncSettingTab extends PluginSettingTab {
   private codeVerifier: string | null = null;
@@ -76,6 +77,18 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
       this.renderAuth(containerEl);
     }
     this.renderAppKey(containerEl);
+
+    // ── Troubleshooting ──
+    new Setting(containerEl).setName("Troubleshooting").setHeading();
+    new Setting(containerEl)
+      .setName("View sync logs")
+      .setDesc(`Device: ${this.plugin.settings.deviceId || "unknown"}`)
+      .addButton((btn) =>
+        btn.setButtonText("View Logs").onClick(async () => {
+          const content = await this.plugin.readLogs();
+          new LogViewerModal(this.app, content, this.plugin.settings.deviceId).open();
+        }),
+      );
   }
 
   // ── 인증 (미연결 시) ──
@@ -159,6 +172,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
             }
             this.plugin.settings.syncName = inputName;
             await this.plugin.saveSettings();
+            this.plugin.resetEngine();
             new Notice(`Vault ID set: ${inputName}`);
             this.display();
           });
