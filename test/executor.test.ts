@@ -644,7 +644,7 @@ describe("executePlan", () => {
     expect(fs.findByPrefix("test.conflict-")).toBeDefined();
   });
 
-  test("conflict manual: 사용자 취소(null) → keep_both fallback", async () => {
+  test("conflict manual: 사용자 취소(null) → skip (다음 싱크에서 재감지)", async () => {
     const localData = new TextEncoder().encode("local version");
     const remoteData = new TextEncoder().encode("remote version");
 
@@ -667,8 +667,10 @@ describe("executePlan", () => {
     });
     expect(result.succeeded).toHaveLength(1);
 
-    // keep_both fallback → conflict 파일 생성
-    expect(fs.findByPrefix("test.conflict-")).toBeDefined();
+    // skip → conflict 파일 생성 안 됨, 상태 미갱신
+    expect(fs.findByPrefix("test.conflict-")).toBeUndefined();
+    // 로컬 파일 그대로
+    expect(await fs.read("test.md")).toEqual(localData);
   });
 });
 

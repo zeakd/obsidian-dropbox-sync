@@ -321,13 +321,8 @@ async function handleConflictManual(
 
   const choice = await deps.conflictResolver(localPath, context);
 
-  if (choice === "skip") {
+  if (choice === "skip" || !choice) {
     // 아무것도 안 함 → 다음 싱크에서 다시 conflict 감지
-    return;
-  }
-
-  if (!choice) {
-    await handleConflictKeepBoth(item, deps);
     return;
   }
 
