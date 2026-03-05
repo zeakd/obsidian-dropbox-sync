@@ -18,6 +18,7 @@ export class SyncStatusModal extends Modal {
       onSyncNow: () => void;
       onToggleSync: () => void;
       onOpenSettings: () => void;
+      checkRemote?: () => Promise<{ pendingChanges: number } | null>;
     },
   ) {
     super(app);
@@ -42,6 +43,13 @@ export class SyncStatusModal extends Modal {
         cls: "setting-item-description",
       });
     }
+
+    // Dropbox 실시간 상태 (비동기)
+    const remoteEl = contentEl.createEl("p", {
+      text: "Dropbox: checking...",
+      cls: "setting-item-description",
+    });
+    this.checkRemoteStatus(remoteEl);
 
     contentEl.createEl("p", {
       text: `Device: ${info.deviceId} · v${info.version}`,
@@ -78,6 +86,29 @@ export class SyncStatusModal extends Modal {
 
   onClose(): void {
     this.contentEl.empty();
+  }
+
+  private async checkRemoteStatus(el: HTMLElement): Promise<void> {
+    if (!this.actions.checkRemote) {
+      el.textContent = "Dropbox: not connected";
+      return;
+    }
+
+    try {
+      const result = await this.actions.checkRemote();
+      if (!result) {
+        el.textContent = "Dropbox: not connected";
+      } else if (result.pendingChanges > 0) {
+        el.textContent = `Dropbox: ${result.pendingChanges} pending change(s)`;
+        el.style.color = "var(--text-accent)";
+      } else {
+        el.textContent = "Dropbox: up to date";
+        el.style.color = "var(--text-success, var(--text-normal))";
+      }
+    } catch {
+      el.textContent = "Dropbox: check failed";
+      el.style.color = "var(--text-error)";
+    }
   }
 
   private formatStatus(): string {

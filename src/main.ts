@@ -18,7 +18,7 @@ import { DropboxAdapter, DropboxAuthError } from "./adapters/dropbox-adapter";
 import { IndexedDBStore } from "./adapters/indexeddb-store";
 import { VaultFileStore } from "./adapters/vault-file-store";
 import { SyncEngine } from "./sync/engine";
-import type { SyncStateStore } from "./adapters/interfaces";
+import type { RemoteStorage, SyncStateStore } from "./adapters/interfaces";
 import {
   generateCodeVerifier,
   generateCodeChallenge,
@@ -38,6 +38,7 @@ export default class DropboxSyncPlugin extends Plugin {
   private syncEngine: SyncEngine | null = null;
   private syncing = false;
   private store: SyncStateStore | null = null;
+  private remoteAdapter: RemoteStorage | null = null;
   private pendingAuth: { codeVerifier: string; state: string } | null = null;
   private syncTimerId: number | null = null;
   private abortController: AbortController | null = null;
@@ -669,6 +670,7 @@ export default class DropboxSyncPlugin extends Plugin {
           }
         },
         onOpenSettings: () => this.openSettings(),
+        checkRemote: () => this.checkRemoteChanges(),
       },
     ).open();
   }
@@ -771,6 +773,14 @@ export default class DropboxSyncPlugin extends Plugin {
     this.app.setting?.openTabById(this.manifest.id);
   }
 
+  private async checkRemoteChanges(): Promise<{ pendingChanges: number } | null> {
+    if (!this.store || !this.remoteAdapter) return null;
+    const cursor = await this.store.getMeta("cursor");
+    if (!cursor) return null;
+    const result = await this.remoteAdapter.listChanges(cursor);
+    return { pendingChanges: result.entries.length };
+  }
+
   private persistDeleteLog(engine: SyncEngine): void {
     if (!this.store) return;
     const log = engine.getDeleteLog();
@@ -795,6 +805,7 @@ export default class DropboxSyncPlugin extends Plugin {
         await this.saveSettings();
       },
     });
+    this.remoteAdapter = remote;
     this.store = Platform.isIosApp
       ? new VaultFileStore(this.app.vault)
       : new IndexedDBStore(vaultId);
