@@ -119,6 +119,12 @@ export default class DropboxSyncPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "demo-conflict",
+      name: "Demo conflict modal",
+      callback: () => this.showDemoConflict(),
+    });
+
+    this.addCommand({
       id: "toggle-sync",
       name: "Toggle sync on/off",
       callback: () => {
@@ -690,6 +696,68 @@ export default class DropboxSyncPlugin extends Plugin {
   private async showLogs(): Promise<void> {
     const content = await this.readLogs();
     new LogViewerModal(this.app, content, this.settings.deviceId).open();
+  }
+
+  private async showDemoConflict(): Promise<void> {
+    const local = [
+      "# 프로젝트 회의록",
+      "",
+      "## 참석자",
+      "- Alice",
+      "- Bob",
+      "- Charlie",
+      "",
+      "## 논의사항",
+      "",
+      "### 1. 아키텍처 결정",
+      "SQLite를 메인 DB로 사용하기로 결정.",
+      "WAL 모드로 동시 읽기 성능 확보.",
+      "",
+      "### 2. 일정",
+      "- 1주차: 설계",
+      "- 2주차: 구현",
+      "- 3주차: 테스트",
+      "",
+      "### 3. 다음 회의",
+      "3월 10일 월요일 오후 2시",
+    ].join("\n");
+
+    const remote = [
+      "# 프로젝트 회의록",
+      "",
+      "## 참석자",
+      "- Alice",
+      "- Bob",
+      "- Diana (Charlie 대신 참석)",
+      "",
+      "## 논의사항",
+      "",
+      "### 1. 아키텍처 결정",
+      "PostgreSQL을 메인 DB로 사용하기로 결정.",
+      "확장성을 고려한 선택.",
+      "",
+      "### 2. 일정",
+      "- 1주차: 설계 + 프로토타입",
+      "- 2주차: 구현",
+      "- 3주차: QA + 배포",
+      "",
+      "### 3. 다음 회의",
+      "3월 12일 수요일 오후 3시",
+    ].join("\n");
+
+    const modal = new ConflictModal(this.app, "meeting-notes.md", {
+      localContent: local,
+      remoteContent: remote,
+      localSize: new TextEncoder().encode(local).length,
+      remoteSize: new TextEncoder().encode(remote).length,
+      remoteMtime: Date.now() - 3600000,
+    });
+    const choice = await modal.waitForChoice();
+    if (choice) {
+      new Notice(`Demo: "${choice}" selected`);
+    } else {
+      new Notice("Demo: cancelled (keep_both fallback)");
+    }
   }
 
   private openSettings(): void {
