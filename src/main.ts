@@ -28,6 +28,7 @@ import {
 const REDIRECT_URI = "obsidian://dropbox-sync";
 const MAX_LOG_LINES = 200;
 const LOG_BUFFER_FLUSH_SIZE = 10;
+const DEBOUNCE_DELAY_MS = 5000;
 
 export default class DropboxSyncPlugin extends Plugin {
   settings: PluginSettings = DEFAULT_SETTINGS;
@@ -40,6 +41,7 @@ export default class DropboxSyncPlugin extends Plugin {
   private abortController: AbortController | null = null;
   onAuthChange: (() => void) | null = null;
   private logBuffer: string[] = [];
+  private debounceTimerId: number | null = null;
 
   private get logPath(): string {
     return `sync-debug-${this.settings.deviceId || "unknown"}.log`;
@@ -124,14 +126,27 @@ export default class DropboxSyncPlugin extends Plugin {
           }
         }
 
-        // 삭제/이름변경 이벤트 추적
+        // 파일 수정 → debounce sync (항상)
+        this.registerEvent(
+          this.app.vault.on("modify", (file) => {
+            if (this.syncing) return;
+            if (file instanceof TFile) {
+              this.scheduleDebouncedSync();
+            }
+          }),
+        );
+
+        // 삭제/이름변경 이벤트 추적 + 옵션에 따라 debounce sync
         this.registerEvent(
           this.app.vault.on("delete", (file) => {
-            if (this.syncing) return; // sync 중 삭제(deleteLocal 등)는 무시
+            if (this.syncing) return;
             if (file instanceof TFile) {
               const pathLower = file.path.toLowerCase();
               engine.trackDelete(pathLower);
               this.persistDeleteLog(engine);
+              if (this.settings.syncOnCreateDeleteRename) {
+                this.scheduleDebouncedSync();
+              }
             }
           }),
         );
@@ -140,10 +155,22 @@ export default class DropboxSyncPlugin extends Plugin {
           this.app.vault.on("rename", (file, oldPath) => {
             if (this.syncing) return;
             if (file instanceof TFile) {
-              // rename = 구경로 삭제 + 신경로 생성
               const oldPathLower = oldPath.toLowerCase();
               engine.trackDelete(oldPathLower);
               this.persistDeleteLog(engine);
+              if (this.settings.syncOnCreateDeleteRename) {
+                this.scheduleDebouncedSync();
+              }
+            }
+          }),
+        );
+
+        // 파일 생성 → 옵션에 따라 debounce sync
+        this.registerEvent(
+          this.app.vault.on("create", (file) => {
+            if (this.syncing) return;
+            if (file instanceof TFile && this.settings.syncOnCreateDeleteRename) {
+              this.scheduleDebouncedSync();
             }
           }),
         );
@@ -155,7 +182,24 @@ export default class DropboxSyncPlugin extends Plugin {
 
   onunload(): void {
     this.clearSyncTimer();
+    this.clearDebounceTimer();
     this.statusBar?.destroy();
+  }
+
+  private scheduleDebouncedSync(): void {
+    if (!this.settings.syncEnabled) return;
+    this.clearDebounceTimer();
+    this.debounceTimerId = window.setTimeout(() => {
+      this.debounceTimerId = null;
+      this.syncNow();
+    }, DEBOUNCE_DELAY_MS);
+  }
+
+  private clearDebounceTimer(): void {
+    if (this.debounceTimerId !== null) {
+      window.clearTimeout(this.debounceTimerId);
+      this.debounceTimerId = null;
+    }
   }
 
   // ── OAuth 플로우 (데스크톱) ──

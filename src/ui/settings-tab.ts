@@ -356,7 +356,20 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
 
   private renderSyncOptions(containerEl: HTMLElement): void {
     new Setting(containerEl)
+      .setName("Sync on file create/delete/rename")
+      .setDesc("Trigger sync when files are created, deleted, or renamed. File edits always trigger sync.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.syncOnCreateDeleteRename)
+          .onChange(async (value) => {
+            this.plugin.settings.syncOnCreateDeleteRename = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
       .setName("Sync interval (seconds)")
+      .setDesc("Fallback interval when no file changes are detected.")
       .addSlider((slider) =>
         slider
           .setLimits(30, 600, 30)
