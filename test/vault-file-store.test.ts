@@ -110,4 +110,54 @@ describe("VaultFileStore", () => {
   test("파일 없는 초기 상태에서 getAllEntries → 빈 배열", async () => {
     expect(await store.getAllEntries()).toEqual([]);
   });
+
+  // ── 동시성 테스트 ──
+
+  test("동시에 여러 setEntry 호출 → 모든 엔트리 보존", async () => {
+    const entries = Array.from({ length: 10 }, (_, i) => ({
+      ...entry,
+      pathLower: `file-${i}.md`,
+      localPath: `file-${i}.md`,
+      rev: `rev_${i}`,
+    }));
+
+    // 모든 setEntry를 동시에 실행
+    await Promise.all(entries.map((e) => store.setEntry(e)));
+
+    const all = await store.getAllEntries();
+    expect(all).toHaveLength(10);
+
+    // 각 엔트리가 올바르게 저장되었는지 확인
+    for (const e of entries) {
+      const result = await store.getEntry(e.pathLower);
+      expect(result?.rev).toBe(e.rev);
+    }
+  });
+
+  test("동시에 setEntry + setMeta → 상호 간섭 없음", async () => {
+    await Promise.all([
+      store.setEntry(entry),
+      store.setMeta("cursor", "abc"),
+      store.setEntry({ ...entry, pathLower: "b.md", localPath: "b.md" }),
+      store.setMeta("deviceId", "xyz"),
+    ]);
+
+    expect(await store.getEntry("test.md")).not.toBeNull();
+    expect(await store.getEntry("b.md")).not.toBeNull();
+    expect(await store.getMeta("cursor")).toBe("abc");
+    expect(await store.getMeta("deviceId")).toBe("xyz");
+  });
+
+  test("동시에 setEntry + deleteEntry → 최종 상태 일관성", async () => {
+    await store.setEntry(entry);
+
+    // 삭제와 새 추가를 동시에
+    await Promise.all([
+      store.deleteEntry("test.md"),
+      store.setEntry({ ...entry, pathLower: "new.md", localPath: "new.md" }),
+    ]);
+
+    expect(await store.getEntry("test.md")).toBeNull();
+    expect(await store.getEntry("new.md")).not.toBeNull();
+  });
 });

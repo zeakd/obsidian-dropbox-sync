@@ -9,7 +9,7 @@ mock.module("obsidian", () => ({
 }));
 
 function createAdapter(): DropboxAdapter {
-  return new DropboxAdapter({
+  const adapter = new DropboxAdapter({
     appKey: "test-key",
     remotePath: "",
     getAccessToken: () => "test-token",
@@ -17,6 +17,9 @@ function createAdapter(): DropboxAdapter {
     getTokenExpiry: () => Date.now() + 3600_000,
     onTokenRefreshed: () => {},
   });
+  // sleep을 즉시 resolve로 override (retry 테스트 속도)
+  (adapter as any).sleep = () => Promise.resolve();
+  return adapter;
 }
 
 describe("DropboxAdapter retry on 429", () => {
@@ -125,6 +128,104 @@ describe("DropboxAdapter retry on 429", () => {
     const result = await adapter.upload("test.md", data);
     expect(result.rev).toBe("rev_2");
     expect(requestUrlMock).toHaveBeenCalledTimes(2);
+  });
+
+  // ── 5xx retry ──
+
+  test("upload: 503 → retry 후 성공", async () => {
+    const adapter = createAdapter();
+    const data = new Uint8Array([1, 2, 3]);
+
+    requestUrlMock.mockResolvedValueOnce({
+      status: 503,
+      json: {},
+      text: "service unavailable",
+    });
+
+    requestUrlMock.mockResolvedValueOnce({
+      status: 200,
+      json: {
+        path_display: "/test.md",
+        content_hash: "abc123",
+        server_modified: "2024-01-01T00:00:00Z",
+        rev: "rev_3",
+        size: 3,
+      },
+      text: "",
+    });
+
+    const result = await adapter.upload("test.md", data);
+    expect(result.rev).toBe("rev_3");
+    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("download: 500 → retry 후 성공", async () => {
+    const adapter = createAdapter();
+
+    requestUrlMock.mockResolvedValueOnce({
+      status: 500,
+      json: {},
+      text: "internal server error",
+    });
+
+    requestUrlMock.mockResolvedValueOnce({
+      status: 200,
+      arrayBuffer: new ArrayBuffer(5),
+      headers: {
+        "dropbox-api-result": JSON.stringify({
+          path_display: "/test.md",
+          content_hash: "abc123",
+          server_modified: "2024-01-01T00:00:00Z",
+          rev: "rev_1",
+          size: 5,
+        }),
+      },
+      text: "",
+    });
+
+    const result = await adapter.download("test.md");
+    expect(result.metadata.rev).toBe("rev_1");
+    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("rpcCall: 503 → retry 후 성공", async () => {
+    const adapter = createAdapter();
+
+    requestUrlMock.mockResolvedValueOnce({
+      status: 503,
+      json: {},
+      text: "service unavailable",
+    });
+
+    requestUrlMock.mockResolvedValueOnce({
+      status: 200,
+      json: {
+        entries: [],
+        cursor: "cursor_2",
+        has_more: false,
+      },
+      text: "{}",
+    });
+
+    const result = await adapter.listChanges();
+    expect(result.cursor).toBe("cursor_2");
+    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("upload: 503 연속 4번 → 에러 throw", async () => {
+    const adapter = createAdapter();
+    const data = new Uint8Array([1]);
+
+    for (let i = 0; i < 4; i++) {
+      requestUrlMock.mockResolvedValueOnce({
+        status: 503,
+        json: {},
+        text: "service unavailable",
+      });
+    }
+
+    await expect(adapter.upload("test.md", data)).rejects.toThrow("Dropbox API error 503");
+    expect(requestUrlMock).toHaveBeenCalledTimes(4);
   });
 
   test("rpcCall: 409 reset → DropboxCursorResetError (retry 안 함)", async () => {

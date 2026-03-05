@@ -12,6 +12,7 @@ export interface FileSystem {
   write(path: string, data: Uint8Array, mtime?: number): Promise<void>;
   delete(path: string): Promise<void>;
   list(): Promise<FileInfo[]>;
+  stat(path: string): Promise<{ mtime: number; size: number }>;
   computeHash(path: string): Promise<string>;
 }
 

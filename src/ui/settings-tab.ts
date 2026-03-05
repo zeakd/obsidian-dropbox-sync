@@ -1,4 +1,4 @@
-import { App, Modal, Platform, PluginSettingTab, Setting, Notice } from "obsidian";
+import { App, Modal, Platform, PluginSettingTab, Setting, Notice, TFile } from "obsidian";
 import type DropboxSyncPlugin from "../main";
 import { DEFAULT_APP_KEY, getEffectiveAppKey, isValidSyncName, sanitizeSyncName } from "../settings";
 import {
@@ -8,6 +8,7 @@ import {
   exchangeCodeForToken,
 } from "../adapters/dropbox-auth";
 import { LogViewerModal } from "./log-viewer-modal";
+import { isExcluded } from "../exclude";
 
 export class DropboxSyncSettingTab extends PluginSettingTab {
   private codeVerifier: string | null = null;
@@ -357,8 +358,15 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
 
   private renderSyncOptions(containerEl: HTMLElement): void {
     // ── 기본 옵션 ──
-    new Setting(containerEl)
+    const strategyDescs: Record<string, string> = {
+      keep_both: "Both versions are kept. Remote version is saved as a .conflict file.",
+      newest: "The newer version wins, based on modification time.",
+      manual: "A merge modal opens so you can compare and choose per section.",
+    };
+
+    const strategySetting = new Setting(containerEl)
       .setName("Conflict strategy")
+      .setDesc(strategyDescs[this.plugin.settings.conflictStrategy] ?? "")
       .addDropdown((dropdown) =>
         dropdown
           .addOption("keep_both", "Keep both versions")
@@ -370,11 +378,12 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
               | "keep_both"
               | "newest"
               | "manual";
+            strategySetting.setDesc(strategyDescs[value] ?? "");
             await this.plugin.saveSettings();
           }),
       );
 
-    new Setting(containerEl)
+    const excludeSetting = new Setting(containerEl)
       .setName("Exclude patterns")
       .setDesc("Files matching these patterns won't sync. One per line. Examples: *.pdf, attachments/, .obsidian/workspace*")
       .addTextArea((text) => {
@@ -387,10 +396,12 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
               .filter(Boolean);
             await this.plugin.saveSettings();
             this.plugin.resetEngine();
+            this.updateExcludeCount(excludeSetting);
           });
         text.inputEl.rows = 4;
         text.inputEl.style.width = "100%";
       });
+    this.updateExcludeCount(excludeSetting);
 
     // ── Advanced ──
     new Setting(containerEl).setName("Advanced").setHeading();
@@ -491,6 +502,17 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
             }),
         );
     }
+  }
+
+  private updateExcludeCount(setting: Setting): void {
+    const patterns = this.plugin.settings.excludePatterns;
+    if (patterns.length === 0) {
+      setting.setDesc("Files matching these patterns won't sync. One per line. Examples: *.pdf, attachments/, .obsidian/workspace*");
+      return;
+    }
+    const allFiles = this.app.vault.getFiles();
+    const excluded = allFiles.filter((f: TFile) => isExcluded(f.path, patterns));
+    setting.setDesc(`${excluded.length} file(s) excluded out of ${allFiles.length} total.`);
   }
 }
 

@@ -51,6 +51,12 @@ export class MemoryFileSystem implements FileSystem {
     return result;
   }
 
+  async stat(path: string): Promise<{ mtime: number; size: number }> {
+    const file = this.files.get(path);
+    if (!file) throw new Error(`File not found: ${path}`);
+    return { mtime: file.mtime, size: file.data.length };
+  }
+
   async computeHash(path: string): Promise<string> {
     const file = this.files.get(path);
     if (!file) throw new Error(`File not found: ${path}`);

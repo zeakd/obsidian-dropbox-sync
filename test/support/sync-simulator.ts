@@ -93,9 +93,9 @@ export class Device {
     this.engine = new SyncEngine({ fs: this.fs, remote, store: this.store }, options);
   }
 
-  async editFile(path: string, content: string): Promise<void> {
+  async editFile(path: string, content: string, mtime?: number): Promise<void> {
     const data = new TextEncoder().encode(content);
-    await this.fs.write(path, data);
+    await this.fs.write(path, data, mtime);
   }
 
   async deleteFile(path: string): Promise<void> {

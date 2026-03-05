@@ -11,8 +11,12 @@ const META_PATH = ".sync-state/meta.json";
  * IndexedDB가 불안정한 iOS에서 사용.
  * vault adapter를 직접 사용하여 이벤트 발화를 방지한다.
  * .sync-state/ 경로는 vault-adapter.ts의 shouldExclude에 이미 등록됨.
+ *
+ * 모든 write 연산은 mutex로 직렬화되어 동시성 문제를 방지한다.
  */
 export class VaultFileStore implements SyncStateStore {
+  private mutex = Promise.resolve();
+
   constructor(private vault: Vault) {}
 
   async getEntry(pathLower: string): Promise<SyncEntry | null> {
@@ -21,15 +25,19 @@ export class VaultFileStore implements SyncStateStore {
   }
 
   async setEntry(entry: SyncEntry): Promise<void> {
-    const entries = await this.loadEntries();
-    entries[entry.pathLower] = entry;
-    await this.saveEntries(entries);
+    return this.withLock(async () => {
+      const entries = await this.loadEntries();
+      entries[entry.pathLower] = entry;
+      await this.saveEntries(entries);
+    });
   }
 
   async deleteEntry(pathLower: string): Promise<void> {
-    const entries = await this.loadEntries();
-    delete entries[pathLower];
-    await this.saveEntries(entries);
+    return this.withLock(async () => {
+      const entries = await this.loadEntries();
+      delete entries[pathLower];
+      await this.saveEntries(entries);
+    });
   }
 
   async getAllEntries(): Promise<SyncEntry[]> {
@@ -38,8 +46,10 @@ export class VaultFileStore implements SyncStateStore {
   }
 
   async clear(): Promise<void> {
-    await this.writeFile(ENTRIES_PATH, "{}");
-    await this.writeFile(META_PATH, "{}");
+    return this.withLock(async () => {
+      await this.writeFile(ENTRIES_PATH, "{}");
+      await this.writeFile(META_PATH, "{}");
+    });
   }
 
   async getMeta(key: string): Promise<string | null> {
@@ -48,12 +58,27 @@ export class VaultFileStore implements SyncStateStore {
   }
 
   async setMeta(key: string, value: string): Promise<void> {
-    const meta = await this.loadMeta();
-    meta[key] = value;
-    await this.saveMeta(meta);
+    return this.withLock(async () => {
+      const meta = await this.loadMeta();
+      meta[key] = value;
+      await this.saveMeta(meta);
+    });
   }
 
   // ── private ──
+
+  private async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const prev = this.mutex;
+    this.mutex = gate;
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
 
   private async loadEntries(): Promise<Record<string, SyncEntry>> {
     return this.readJson<Record<string, SyncEntry>>(ENTRIES_PATH, {});
@@ -85,13 +110,8 @@ export class VaultFileStore implements SyncStateStore {
 
   private async writeFile(path: string, content: string): Promise<void> {
     await this.ensureDir(".sync-state");
-    const tmpPath = path + ".tmp";
-    await this.vault.adapter.write(tmpPath, content);
-    // atomic rename: 쓰기 완료 후에만 원본 교체
-    if (await this.vault.adapter.exists(path)) {
-      await this.vault.adapter.remove(path);
-    }
-    await this.vault.adapter.rename(tmpPath, path);
+    // 직접 write (vault adapter.write는 존재 시 덮어씀)
+    await this.vault.adapter.write(path, content);
   }
 
   private async ensureDir(dir: string): Promise<void> {

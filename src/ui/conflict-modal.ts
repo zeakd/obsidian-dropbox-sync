@@ -118,8 +118,11 @@ export class ConflictModal extends Modal {
     // 이벤트: 선택 변경 시 상태 갱신
     scrollContainer.addEventListener("conflict-resolved", () => updateStatus());
 
-    new Setting(el)
-      .addButton((btn) =>
+    const btnRow = new Setting(el);
+    let saveBtnEl: HTMLButtonElement | null = null;
+
+    btnRow
+      .addButton((btn) => {
         btn
           .setButtonText("Save")
           .setCta()
@@ -130,8 +133,9 @@ export class ConflictModal extends Modal {
               content: new TextEncoder().encode(merged),
             };
             this.close();
-          }),
-      )
+          });
+        saveBtnEl = btn.buttonEl;
+      })
       .addButton((btn) =>
         btn.setButtonText("Keep all local").onClick(() => {
           this.choice = "local";
@@ -150,6 +154,23 @@ export class ConflictModal extends Modal {
           this.close();
         }),
       );
+
+    // Save 버튼에 미해결 경고 표시
+    const updateSaveBtn = () => {
+      if (!saveBtnEl) return;
+      const unresolved = segments.filter(
+        (s) => s.type === "conflict" && s.choice === null,
+      ).length;
+      if (unresolved > 0) {
+        saveBtnEl.textContent = `Save (${unresolved} unresolved → local)`;
+        saveBtnEl.title = `${unresolved} unresolved conflict(s) will default to local version`;
+      } else {
+        saveBtnEl.textContent = "Save";
+        saveBtnEl.title = "";
+      }
+    };
+    updateSaveBtn();
+    scrollContainer.addEventListener("conflict-resolved", () => updateSaveBtn());
   }
 
   private renderResolvedBlock(parent: HTMLElement, lines: string[]): void {

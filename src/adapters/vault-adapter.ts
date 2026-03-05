@@ -4,13 +4,24 @@ import type { FileInfo } from "../types";
 import { dropboxContentHashBrowser } from "../hash.browser";
 import { isExcluded } from "../exclude";
 
+interface HashCacheEntry {
+  mtime: number;
+  size: number;
+  hash: string;
+}
+
 /**
  * Obsidian Vault API를 FileSystem 인터페이스로 래핑.
  *
  * 항상 Vault API를 사용한다 (adapter 직접 사용 X).
  * → 이벤트가 올바르게 발화되고, MetadataCache가 자동 업데이트됨.
+ *
+ * list()는 mtime/size 기반 해시 캐시를 사용해서
+ * 변경되지 않은 파일의 재해싱을 건너뛴다.
  */
 export class VaultAdapter implements FileSystem {
+  private hashCache = new Map<string, HashCacheEntry>();
+
   constructor(private vault: Vault, private excludePatterns: string[] = []) {}
 
   async read(path: string): Promise<Uint8Array> {
@@ -26,7 +37,6 @@ export class VaultAdapter implements FileSystem {
     if (existing && this.isTFile(existing)) {
       await this.vault.modifyBinary(existing, data.buffer as ArrayBuffer, options);
     } else {
-      // 상위 폴더가 없으면 생성
       await this.ensureParentDir(path);
       await this.vault.createBinary(path, data.buffer as ArrayBuffer, options);
     }
@@ -35,37 +45,56 @@ export class VaultAdapter implements FileSystem {
   async delete(path: string): Promise<void> {
     const file = this.vault.getAbstractFileByPath(path);
     if (file) {
-      await this.vault.trash(file, false); // vault .trash로 이동
+      await this.vault.trash(file, false);
     }
   }
 
   async list(): Promise<FileInfo[]> {
     const files = this.vault.getFiles();
     const result: FileInfo[] = [];
+    const nextCache = new Map<string, HashCacheEntry>();
 
     for (const file of files) {
-      // 시스템 파일 제외
       if (this.shouldExclude(file.path)) continue;
 
-      const data = await this.vault.readBinary(file);
-      const hash = await dropboxContentHashBrowser(new Uint8Array(data));
+      const pathLower = file.path.toLowerCase();
+      const cached = this.hashCache.get(pathLower);
 
+      let hash: string;
+      if (cached && cached.mtime === file.stat.mtime && cached.size === file.stat.size) {
+        hash = cached.hash;
+      } else {
+        const data = await this.vault.readBinary(file);
+        hash = await dropboxContentHashBrowser(new Uint8Array(data));
+      }
+
+      nextCache.set(pathLower, { mtime: file.stat.mtime, size: file.stat.size, hash });
       result.push({
         path: file.path,
-        pathLower: file.path.toLowerCase(),
+        pathLower,
         hash,
         mtime: file.stat.mtime,
         size: file.stat.size,
       });
     }
 
+    this.hashCache = nextCache;
     return result;
+  }
+
+  async stat(path: string): Promise<{ mtime: number; size: number }> {
+    const file = this.getFile(path);
+    return { mtime: file.stat.mtime, size: file.stat.size };
   }
 
   async computeHash(path: string): Promise<string> {
     const file = this.getFile(path);
     const data = await this.vault.readBinary(file);
     return dropboxContentHashBrowser(new Uint8Array(data));
+  }
+
+  clearCache(): void {
+    this.hashCache.clear();
   }
 
   // ── private ──

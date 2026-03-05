@@ -644,6 +644,169 @@ describe("executePlan", () => {
     expect(fs.findByPrefix("test.conflict-")).toBeDefined();
   });
 
+  // ── A1: upload rev 충돌 → strategy별 분기 ──
+
+  test("upload rev 충돌 + newest: 로컬이 최신이면 로컬 유지", async () => {
+    const remoteData = new TextEncoder().encode("remote version");
+    await remote.upload("test.md", remoteData);
+
+    const localData = new TextEncoder().encode("local version");
+    await fs.write("test.md", localData, Date.now() + 10000);
+
+    await store.setEntry({
+      pathLower: "test.md",
+      localPath: "test.md",
+      baseLocalHash: "old",
+      baseRemoteHash: "old",
+      rev: "wrong_rev",
+      lastSynced: 1000,
+    });
+
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: { type: "upload", reason: "local_modified" },
+    });
+
+    const result = await executePlan(plan, deps, {
+      conflictStrategy: "newest",
+    });
+    expect(result.succeeded).toHaveLength(1);
+    expect(fs.findByPrefix("test.conflict-")).toBeUndefined();
+    const dl = await remote.download("test.md");
+    expect(dl.data).toEqual(localData);
+  });
+
+  test("upload rev 충돌 + newest: 원격이 최신이면 원격으로 덮어쓰기", async () => {
+    const remoteData = new TextEncoder().encode("remote version");
+    await remote.upload("test.md", remoteData);
+
+    const localData = new TextEncoder().encode("local version");
+    await fs.write("test.md", localData, 100);
+
+    await store.setEntry({
+      pathLower: "test.md",
+      localPath: "test.md",
+      baseLocalHash: "old",
+      baseRemoteHash: "old",
+      rev: "wrong_rev",
+      lastSynced: 1000,
+    });
+
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: { type: "upload", reason: "local_modified" },
+    });
+
+    const result = await executePlan(plan, deps, {
+      conflictStrategy: "newest",
+    });
+    expect(result.succeeded).toHaveLength(1);
+    expect(await fs.read("test.md")).toEqual(remoteData);
+    expect(fs.findByPrefix("test.conflict-")).toBeUndefined();
+  });
+
+  test("upload rev 충돌 + manual: resolver로 위임 (remote 선택)", async () => {
+    const remoteData = new TextEncoder().encode("remote version");
+    await remote.upload("test.md", remoteData);
+
+    const localData = new TextEncoder().encode("local version");
+    await fs.write("test.md", localData);
+
+    await store.setEntry({
+      pathLower: "test.md",
+      localPath: "test.md",
+      baseLocalHash: "old",
+      baseRemoteHash: "old",
+      rev: "wrong_rev",
+      lastSynced: 1000,
+    });
+
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: { type: "upload", reason: "local_modified" },
+    });
+
+    const result = await executePlan(plan, deps, {
+      conflictStrategy: "manual",
+      conflictResolver: async () => "remote",
+    });
+    expect(result.succeeded).toHaveLength(1);
+    expect(await fs.read("test.md")).toEqual(remoteData);
+  });
+
+  test("upload rev 충돌 + manual: merged 결과 적용", async () => {
+    const remoteData = new TextEncoder().encode("remote version");
+    await remote.upload("test.md", remoteData);
+
+    const localData = new TextEncoder().encode("local version");
+    await fs.write("test.md", localData);
+
+    await store.setEntry({
+      pathLower: "test.md",
+      localPath: "test.md",
+      baseLocalHash: "old",
+      baseRemoteHash: "old",
+      rev: "wrong_rev",
+      lastSynced: 1000,
+    });
+
+    const merged = new TextEncoder().encode("merged content");
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: { type: "upload", reason: "local_modified" },
+    });
+
+    const result = await executePlan(plan, deps, {
+      conflictStrategy: "manual",
+      conflictResolver: async () => ({ type: "merged", content: merged }),
+    });
+    expect(result.succeeded).toHaveLength(1);
+    expect(await fs.read("test.md")).toEqual(merged);
+    const dl = await remote.download("test.md");
+    expect(dl.data).toEqual(merged);
+  });
+
+  // ── A2: stat() 호출 검증 ──
+
+  test("conflict newest: stat()으로 mtime 조회 (list() 미호출)", async () => {
+    const localData = new TextEncoder().encode("local");
+    const remoteData = new TextEncoder().encode("remote");
+    await fs.write("test.md", localData, Date.now() + 10000);
+    await remote.upload("test.md", remoteData);
+
+    let statCalled = false;
+    const origStat = fs.stat.bind(fs);
+    fs.stat = async (path: string) => {
+      statCalled = true;
+      return origStat(path);
+    };
+
+    let listCalled = false;
+    const origList = fs.list.bind(fs);
+    fs.list = async () => {
+      listCalled = true;
+      return origList();
+    };
+
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: {
+        type: "conflict",
+        localHash: dropboxContentHash(localData),
+        remoteHash: dropboxContentHash(remoteData),
+      },
+    });
+
+    await executePlan(plan, deps, { conflictStrategy: "newest" });
+    expect(statCalled).toBe(true);
+    expect(listCalled).toBe(false);
+  });
+
   test("conflict manual: 사용자 취소(null) → skip (다음 싱크에서 재감지)", async () => {
     const localData = new TextEncoder().encode("local version");
     const remoteData = new TextEncoder().encode("remote version");

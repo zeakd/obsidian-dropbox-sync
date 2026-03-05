@@ -159,3 +159,206 @@ describe("2기기 동기화 시나리오", () => {
     expect(await B.readFile("note.md")).toBe("v3");
   });
 });
+
+// ── newest 전략 ──
+
+describe("2기기 동기화: newest 전략", () => {
+  let sim: SyncSimulator;
+  let A: Device;
+  let B: Device;
+
+  beforeEach(() => {
+    sim = new SyncSimulator();
+    A = sim.addDevice("A", { conflictStrategy: "newest" });
+    B = sim.addDevice("B", { conflictStrategy: "newest" });
+  });
+
+  test("충돌: 로컬이 최신이면 로컬 버전 유지, conflict 파일 없음", async () => {
+    await A.editFile("note.md", "original");
+    await A.sync();
+    await B.sync();
+
+    // A가 더 나중에 수정 (mtime 더 큼)
+    await A.editFile("note.md", "version A", Date.now() + 10000);
+    await B.editFile("note.md", "version B", Date.now() - 10000);
+
+    await A.sync();
+    await B.sync(); // B에서 conflict → newest → A 버전(원격)이 더 최신
+
+    // B에서 A 버전으로 덮어씌워짐 (원격이 더 최신)
+    expect(await B.readFile("note.md")).toBe("version A");
+    // conflict 파일 없음
+    expect(B.findFileByPrefix("note.conflict-")).toBeUndefined();
+  });
+
+  test("충돌: 로컬이 더 오래됨 → 원격 버전으로 덮어쓰기", async () => {
+    await A.editFile("note.md", "original");
+    await A.sync();
+    await B.sync();
+
+    // B가 더 나중에 수정
+    await A.editFile("note.md", "version A", Date.now() - 10000);
+    await B.editFile("note.md", "version B", Date.now() + 10000);
+
+    await A.sync();
+    await B.sync(); // B에서 conflict → newest → B(로컬)가 더 최신
+
+    // B 로컬 버전 유지
+    expect(await B.readFile("note.md")).toBe("version B");
+    expect(B.findFileByPrefix("note.conflict-")).toBeUndefined();
+
+    // A sync → B 버전 다운로드
+    await A.sync();
+    expect(await A.readFile("note.md")).toBe("version B");
+    await sim.assertAllConsistent();
+  });
+
+  test("충돌 후 양쪽 sync → 최종 일치", async () => {
+    await A.editFile("note.md", "original");
+    await A.sync();
+    await B.sync();
+
+    await A.editFile("note.md", "newer A", Date.now() + 20000);
+    await B.editFile("note.md", "older B", Date.now() - 5000);
+
+    await A.sync();
+    await B.sync();
+    await A.sync(); // A가 B의 최종 상태 반영
+
+    await sim.assertAllConsistent();
+  });
+});
+
+// ── manual 전략 ──
+
+describe("2기기 동기화: manual 전략", () => {
+  let sim: SyncSimulator;
+  let A: Device;
+  let B: Device;
+
+  test("충돌: resolver가 local 선택 → 로컬 버전 유지", async () => {
+    sim = new SyncSimulator();
+    A = sim.addDevice("A", {
+      conflictStrategy: "manual",
+      conflictResolver: async () => "local",
+    });
+    B = sim.addDevice("B", {
+      conflictStrategy: "manual",
+      conflictResolver: async () => "local",
+    });
+
+    await A.editFile("note.md", "original");
+    await A.sync();
+    await B.sync();
+
+    await A.editFile("note.md", "version A");
+    await B.editFile("note.md", "version B");
+
+    await A.sync();
+    await B.sync(); // B에서 conflict → manual → "local" → B 버전 유지
+
+    expect(await B.readFile("note.md")).toBe("version B");
+    expect(B.findFileByPrefix("note.conflict-")).toBeUndefined();
+  });
+
+  test("충돌: resolver가 remote 선택 → 원격 버전으로 덮어쓰기", async () => {
+    sim = new SyncSimulator();
+    A = sim.addDevice("A", {
+      conflictStrategy: "manual",
+      conflictResolver: async () => "remote",
+    });
+    B = sim.addDevice("B", {
+      conflictStrategy: "manual",
+      conflictResolver: async () => "remote",
+    });
+
+    await A.editFile("note.md", "original");
+    await A.sync();
+    await B.sync();
+
+    await A.editFile("note.md", "version A");
+    await B.editFile("note.md", "version B");
+
+    await A.sync();
+    await B.sync(); // B에서 conflict → manual → "remote" → A 버전
+
+    expect(await B.readFile("note.md")).toBe("version A");
+    expect(B.findFileByPrefix("note.conflict-")).toBeUndefined();
+
+    // 양쪽 일치 확인
+    await A.sync();
+    await sim.assertAllConsistent();
+  });
+
+  test("충돌: resolver가 merged 반환 → 병합 결과 적용", async () => {
+    sim = new SyncSimulator();
+    A = sim.addDevice("A", {
+      conflictStrategy: "manual",
+      conflictResolver: async (_path, ctx) => {
+        const local = ctx?.localContent ?? "";
+        const remote = ctx?.remoteContent ?? "";
+        const merged = `${local}\n---\n${remote}`;
+        return { type: "merged", content: new TextEncoder().encode(merged) };
+      },
+    });
+    B = sim.addDevice("B", {
+      conflictStrategy: "manual",
+      conflictResolver: async (_path, ctx) => {
+        const local = ctx?.localContent ?? "";
+        const remote = ctx?.remoteContent ?? "";
+        const merged = `${local}\n---\n${remote}`;
+        return { type: "merged", content: new TextEncoder().encode(merged) };
+      },
+    });
+
+    await A.editFile("note.md", "original");
+    await A.sync();
+    await B.sync();
+
+    await A.editFile("note.md", "version A");
+    await B.editFile("note.md", "version B");
+
+    await A.sync();
+    await B.sync(); // B에서 conflict → merged
+
+    const content = await B.readFile("note.md");
+    expect(content).toContain("version B");
+    expect(content).toContain("version A");
+    expect(content).toContain("---");
+  });
+
+  test("충돌: resolver가 skip → deferred, 다음 sync에서 재감지", async () => {
+    sim = new SyncSimulator();
+    let skipCount = 0;
+    A = sim.addDevice("A", {
+      conflictStrategy: "manual",
+      conflictResolver: async () => "local",
+    });
+    B = sim.addDevice("B", {
+      conflictStrategy: "manual",
+      conflictResolver: async () => {
+        skipCount++;
+        if (skipCount <= 1) return "skip";
+        return "local";
+      },
+    });
+
+    await A.editFile("note.md", "original");
+    await A.sync();
+    await B.sync();
+
+    await A.editFile("note.md", "version A");
+    await B.editFile("note.md", "version B");
+
+    await A.sync();
+    const result1 = await B.sync(); // skip → deferred
+    expect(result1.result.deferred).toHaveLength(1);
+
+    // B 파일 변경 안 됨
+    expect(await B.readFile("note.md")).toBe("version B");
+
+    // 두 번째 sync에서 resolver가 "local" 반환
+    const result2 = await B.sync();
+    expect(result2.result.succeeded.length).toBeGreaterThan(0);
+  });
+});

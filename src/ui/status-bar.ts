@@ -5,6 +5,7 @@ export class StatusBar {
   private timerId: ReturnType<typeof setTimeout> | null = null;
   private _lastStatus: SyncStatus = "idle";
   private _lastDetail: string | undefined;
+  private _enabled = false;
 
   constructor(statusBarEl: HTMLElement) {
     this.el = statusBarEl;
@@ -12,6 +13,13 @@ export class StatusBar {
 
   get lastStatus(): SyncStatus { return this._lastStatus; }
   get lastDetail(): string | undefined { return this._lastDetail; }
+
+  set enabled(value: boolean) {
+    this._enabled = value;
+    if (this._lastStatus === "idle") {
+      this.render();
+    }
+  }
 
   onClick(callback: () => void): void {
     this.el.style.cursor = "pointer";
@@ -33,29 +41,40 @@ export class StatusBar {
 
     this._lastStatus = status;
     this._lastDetail = detail;
+    this.render();
 
-    this.el.empty();
-    this.el.style.color = "";
-
-    switch (status) {
-      case "idle":
-        this.el.setText("Dropbox: idle");
-        break;
-      case "syncing":
-        this.el.setText(detail ? `Dropbox: ${detail}` : "Dropbox: syncing...");
-        break;
-      case "success":
-        this.el.setText(`Dropbox: ${detail ?? "synced"}`);
-        this.timerId = setTimeout(() => this.update("idle"), 5000);
-        break;
-      case "error":
-        this.el.setText(`Dropbox: ${detail ?? "error"}`);
-        this.el.style.color = "var(--text-error)";
-        break;
+    if (status === "success") {
+      this.timerId = setTimeout(() => this.update("idle"), 5000);
     }
   }
 
   destroy(): void {
     if (this.timerId) clearTimeout(this.timerId);
+  }
+
+  private render(): void {
+    this.el.empty();
+    this.el.style.color = "";
+
+    switch (this._lastStatus) {
+      case "idle":
+        if (this._enabled) {
+          this.el.setText("Dropbox: idle");
+        } else {
+          this.el.setText("Dropbox: off");
+          this.el.style.color = "var(--text-muted)";
+        }
+        break;
+      case "syncing":
+        this.el.setText(this._lastDetail ? `⟳ ${this._lastDetail}` : "⟳ syncing...");
+        break;
+      case "success":
+        this.el.setText(`Dropbox: ${this._lastDetail ?? "synced"}`);
+        break;
+      case "error":
+        this.el.setText(`Dropbox: ${this._lastDetail ?? "error"}`);
+        this.el.style.color = "var(--text-error)";
+        break;
+    }
   }
 }

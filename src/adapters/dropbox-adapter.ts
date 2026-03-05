@@ -40,6 +40,20 @@ export interface DropboxAdapterConfig {
 export class DropboxAdapter implements RemoteStorage {
   constructor(private config: DropboxAdapterConfig) {}
 
+  /** 429 또는 5xx → retry 대상 */
+  private isRetryable(status: number): boolean {
+    return status === 429 || (status >= 500 && status < 600);
+  }
+
+  private retryDelay(status: number, resp: { json?: unknown }, attempt: number): number {
+    if (status === 429) {
+      const body = resp.json as DropboxErrorResponse | undefined;
+      return (body?.error?.retry_after ?? 1) * 1000;
+    }
+    // 5xx: 지수 백오프 (1s, 2s, 4s)
+    return 1000 * Math.pow(2, attempt);
+  }
+
   async listChanges(cursor?: string): Promise<ListChangesResult> {
     let result: DropboxListFolderResult;
 
@@ -98,11 +112,9 @@ export class DropboxAdapter implements RemoteStorage {
         throw: false,
       });
 
-      if (resp.status === 429) {
+      if (this.isRetryable(resp.status)) {
         if (attempt < maxRetries) {
-          const errBody = resp.json as DropboxErrorResponse;
-          const retryAfter = errBody.error?.retry_after ?? 1;
-          await this.sleep(retryAfter * 1000);
+          await this.sleep(this.retryDelay(resp.status, resp, attempt));
           continue;
         }
         throw this.parseError(resp.status, resp.text);
@@ -158,11 +170,9 @@ export class DropboxAdapter implements RemoteStorage {
         throw: false,
       });
 
-      if (resp.status === 429) {
+      if (this.isRetryable(resp.status)) {
         if (attempt < maxRetries) {
-          const errBody = resp.json as DropboxErrorResponse;
-          const retryAfter = errBody.error?.retry_after ?? 1;
-          await this.sleep(retryAfter * 1000);
+          await this.sleep(this.retryDelay(resp.status, resp, attempt));
           continue;
         }
         throw this.parseError(resp.status, resp.text);
@@ -213,17 +223,19 @@ export class DropboxAdapter implements RemoteStorage {
         throw: false,
       });
 
-      if (resp.status === 429) {
-        const errBody = resp.json as DropboxErrorResponse;
-        const retryAfter = errBody.error?.retry_after ?? 1;
+      if (this.isRetryable(resp.status)) {
         if (attempt < maxRetries) {
-          await this.sleep(retryAfter * 1000);
+          await this.sleep(this.retryDelay(resp.status, resp, attempt));
           continue;
         }
-        throw new DropboxRateLimitError(
-          `Rate limited: ${endpoint}`,
-          retryAfter,
-        );
+        if (resp.status === 429) {
+          const errBody = resp.json as DropboxErrorResponse;
+          throw new DropboxRateLimitError(
+            `Rate limited: ${endpoint}`,
+            errBody.error?.retry_after ?? 1,
+          );
+        }
+        throw this.parseError(resp.status, resp.text);
       }
 
       if (resp.status === 409) {
