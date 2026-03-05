@@ -12,6 +12,8 @@ import {
 import { LogViewerModal } from "./log-viewer-modal";
 import { isExcluded } from "../exclude";
 
+const DOCS_BASE = "https://github.com/zeakd/obsidian-dropbox-sync/blob/main/docs";
+
 export class DropboxSyncSettingTab extends PluginSettingTab {
   private codeVerifier: string | null = null;
 
@@ -83,7 +85,10 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
     this.renderAppKey(containerEl);
 
     // ── Troubleshooting ──
-    new Setting(containerEl).setName("Troubleshooting").setHeading();
+    const troubleshootingFrag = document.createDocumentFragment();
+    const tsLink = troubleshootingFrag.createEl("a", { text: "Troubleshooting guide", href: `${DOCS_BASE}/troubleshooting.md` });
+    tsLink.setAttr("target", "_blank");
+    new Setting(containerEl).setName("Troubleshooting").setDesc(troubleshootingFrag).setHeading();
     new Setting(containerEl)
       .setName("View sync logs")
       .setDesc(`Device: ${this.plugin.settings.deviceId || "unknown"}`)
@@ -366,9 +371,18 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
       manual: "A merge modal opens so you can compare and choose per section.",
     };
 
+    const conflictDesc = (strategy: string) => {
+      const frag = document.createDocumentFragment();
+      frag.appendText(strategyDescs[strategy] ?? "");
+      frag.appendText(" ");
+      const link = frag.createEl("a", { text: "Learn more", href: `${DOCS_BASE}/conflict-resolution.md` });
+      link.setAttr("target", "_blank");
+      return frag;
+    };
+
     const strategySetting = new Setting(containerEl)
       .setName("Conflict strategy")
-      .setDesc(strategyDescs[this.plugin.settings.conflictStrategy] ?? "")
+      .setDesc(conflictDesc(this.plugin.settings.conflictStrategy))
       .addDropdown((dropdown) =>
         dropdown
           .addOption("keep_both", "Keep both versions")
@@ -377,7 +391,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.conflictStrategy)
           .onChange(async (value) => {
             this.plugin.settings.conflictStrategy = value as ConflictStrategy;
-            strategySetting.setDesc(strategyDescs[value] ?? "");
+            strategySetting.setDesc(conflictDesc(value));
             await this.plugin.saveSettings();
           }),
       );
@@ -431,9 +445,17 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
           }),
       );
 
+    const deleteDesc = (() => {
+      const frag = document.createDocumentFragment();
+      frag.appendText("Warn before deleting more files than the threshold. ");
+      const link = frag.createEl("a", { text: "Learn more", href: `${DOCS_BASE}/sync-safety.md` });
+      link.setAttr("target", "_blank");
+      return frag;
+    })();
+
     new Setting(containerEl)
       .setName("Delete protection")
-      .setDesc("Warn before deleting more files than the threshold.")
+      .setDesc(deleteDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.deleteProtection)
