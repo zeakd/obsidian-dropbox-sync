@@ -29,6 +29,8 @@ export interface ExecutorConfig {
   concurrency?: number;
   /** 항목 실행 완료 시마다 호출. (완료 수, 전체 수) */
   onProgress?: (completed: number, total: number) => void;
+  /** conflict 직렬 실행 전 호출. conflict 총 수 전달. */
+  onConflictCount?: (count: number) => void;
 }
 
 /** 내부 함수에서 사용하는 통합 컨텍스트 */
@@ -49,8 +51,9 @@ export async function executePlan(
   const ctx: ExecutorContext = { ...deps, ...config };
   const deferred: SyncPlanItem[] = [];
 
-  // 활성 파일 보호: 먼저 deferred를 분리
+  // 활성 파일 보호 + conflict 분리
   const executable: SyncPlanItem[] = [];
+  const conflicts: SyncPlanItem[] = [];
   for (const item of plan.items) {
     const t = item.action.type;
     if (
@@ -58,6 +61,8 @@ export async function executePlan(
       ctx.isFileActive?.(item.localPath)
     ) {
       deferred.push(item);
+    } else if (t === "conflict" && ctx.conflictStrategy === "manual") {
+      conflicts.push(item);
     } else {
       executable.push(item);
     }
@@ -65,8 +70,9 @@ export async function executePlan(
 
   const concurrency = ctx.concurrency ?? 1;
   let completed = 0;
-  const total = executable.length;
+  const total = executable.length + conflicts.length;
 
+  // 일반 항목: 병렬
   const tasks = executable.map((item) => () => executeItem(item, ctx));
   const settled = await runWithConcurrency(tasks, concurrency, {
     signal: ctx.signal,
@@ -87,6 +93,22 @@ export async function executePlan(
     } else {
       failed.push({ item: executable[i], error: r.reason as Error });
     }
+  }
+
+  // conflict 항목: 직렬 (모달이 순차적으로 뜨도록)
+  if (conflicts.length > 0) {
+    ctx.onConflictCount?.(conflicts.length);
+  }
+  for (const item of conflicts) {
+    if (ctx.signal?.aborted) break;
+    try {
+      await executeItem(item, ctx);
+      succeeded.push(item);
+    } catch (e) {
+      failed.push({ item, error: e as Error });
+    }
+    completed++;
+    ctx.onProgress?.(completed, total);
   }
 
   return { succeeded, failed, deferred };

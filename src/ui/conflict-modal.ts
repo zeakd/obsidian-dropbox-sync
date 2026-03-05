@@ -16,6 +16,7 @@ export class ConflictModal extends Modal {
     app: App,
     private filePath: string,
     private context?: ConflictContext,
+    private progress?: { index: number; total: number },
   ) {
     super(app);
   }
@@ -27,7 +28,10 @@ export class ConflictModal extends Modal {
     this.modalEl.style.maxWidth = mobile ? "95vw" : "90vw";
     this.modalEl.style.width = mobile ? "95vw" : "90vw";
 
-    contentEl.createEl("h3", { text: "Sync Conflict" });
+    const title = this.progress && this.progress.total > 1
+      ? `Sync Conflict (${this.progress.index}/${this.progress.total})`
+      : "Sync Conflict";
+    contentEl.createEl("h3", { text: title });
     contentEl.createEl("p", {
       text: `"${this.filePath}" was modified on both this device and Dropbox.`,
     });

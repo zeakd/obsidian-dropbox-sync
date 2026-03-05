@@ -27,6 +27,8 @@ export interface SyncEngineOptions {
   concurrency?: number;
   /** 항목 실행 완료 시마다 호출. (완료 수, 전체 수) */
   onProgress?: (completed: number, total: number) => void;
+  /** conflict 직렬 실행 전 호출. conflict 총 수 전달. */
+  onConflictCount?: (count: number) => void;
 }
 
 export interface CycleResult {

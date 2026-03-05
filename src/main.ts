@@ -51,6 +51,8 @@ export default class DropboxSyncPlugin extends Plugin {
   private longpollTimerId: number | null = null;
   private longpollErrorCount = 0;
   private visibilityHandler: (() => void) | null = null;
+  private conflictIndex = 0;
+  private conflictTotal = 0;
 
   private get logPath(): string {
     return `sync-debug-${this.settings.deviceId || "unknown"}.log`;
@@ -480,6 +482,8 @@ export default class DropboxSyncPlugin extends Plugin {
 
     try {
       const engine = this.getOrCreateEngine();
+      this.conflictIndex = 0;
+      this.conflictTotal = 0;
       const { plan, result, deletesSkipped, deferredCount } = await engine.runCycle(this.abortController.signal);
 
       await this.log(`plan: ${plan.items.length} items, succeeded: ${result.succeeded.length}, failed: ${result.failed.length}, deletesSkipped: ${deletesSkipped ?? 0}, deferred: ${deferredCount ?? 0}`);
@@ -815,7 +819,11 @@ export default class DropboxSyncPlugin extends Plugin {
       {
         conflictStrategy: this.settings.conflictStrategy,
         conflictResolver: async (filePath, context) => {
-          const modal = new ConflictModal(this.app, filePath, context);
+          this.conflictIndex++;
+          const modal = new ConflictModal(this.app, filePath, context, {
+            index: this.conflictIndex,
+            total: this.conflictTotal,
+          });
           return modal.waitForChoice();
         },
         deleteProtection: this.settings.deleteProtection,
@@ -830,6 +838,10 @@ export default class DropboxSyncPlugin extends Plugin {
         },
         excludePatterns: this.settings.excludePatterns,
         concurrency: 3,
+        onConflictCount: (count) => {
+          this.conflictTotal = count;
+          this.conflictIndex = 0;
+        },
         onProgress: (completed, total) => {
           const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
           this.statusBar?.update("syncing", `${pct}% · ${completed}/${total}`);
