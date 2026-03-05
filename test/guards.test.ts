@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect } from "bun:test";
 import { checkDeleteGuard } from "@/sync/guards";
 import type { SyncPlan, SyncPlanItem } from "@/types";
 

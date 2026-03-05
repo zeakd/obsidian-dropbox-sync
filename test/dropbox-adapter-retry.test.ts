@@ -1,9 +1,9 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, mock, beforeEach } from "bun:test";
 import { DropboxAdapter, DropboxRateLimitError } from "@/adapters/dropbox-adapter";
 
 // requestUrl mock
-const requestUrlMock = vi.fn();
-vi.mock("obsidian", () => ({
+const requestUrlMock = mock();
+mock.module("obsidian", () => ({
   requestUrl: (...args: unknown[]) => requestUrlMock(...args),
   Platform: { isDesktop: true, isMobile: false },
 }));

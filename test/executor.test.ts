@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "vitest";
+import { describe, test, expect, beforeEach } from "bun:test";
 import { executePlan, makeConflictPath } from "@/sync/executor";
 import type { ExecutorDeps, ExecutorConfig } from "@/sync/executor";
 import {

@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "vitest";
+import { describe, test, expect, beforeEach } from "bun:test";
 import { SyncSimulator, Device } from "../support/sync-simulator";
 
 describe("2기기 동기화 시나리오", () => {

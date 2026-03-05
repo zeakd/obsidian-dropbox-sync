@@ -1,8 +1,6 @@
 .env
 node_modules/
-main.js
-*.js.map
 dist/
+*.js.map
 .DS_Store
 data.json
-.github/

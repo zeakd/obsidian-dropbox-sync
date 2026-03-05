@@ -7,9 +7,9 @@ Obsidian vault를 Dropbox로 동기화하는 플러그인.
 ## 빌드 & 테스트
 
 ```bash
-npm run typecheck   # 타입 검사
-npm test            # vitest 실행
-npm run build       # esbuild → main.js
+bun run typecheck   # 타입 검사
+bun test            # bun:test 실행
+bun run build       # Bun.build → dist/
 ```
 
 ## 아키텍처 요약
@@ -57,7 +57,7 @@ test/
 
 ```bash
 # 빌드 + 테스트 vault의 플러그인 폴더에 복사
-npm run build && cp main.js manifest.json styles.css ~/Documents/sync-tester/.obsidian/plugins/dropbox-sync/
+bun run build && cp dist/* ~/Documents/sync-tester/.obsidian/plugins/dropbox-sync/
 ```
 
 ### 개발 사이클
@@ -65,7 +65,7 @@ npm run build && cp main.js manifest.json styles.css ~/Documents/sync-tester/.ob
 빌드 → 복사 → 리로드를 한 번에 수행한다:
 
 ```bash
-npm run build && cp main.js ~/Documents/sync-tester/.obsidian/plugins/dropbox-sync/
+bun run build && cp dist/main.js ~/Documents/sync-tester/.obsidian/plugins/dropbox-sync/
 ```
 
 Hot Reload 플러그인이 `.hotreload` 마커를 감지하여 자동 리로드한다. 사용자에게 수동 리로드를 요청하지 않는다.

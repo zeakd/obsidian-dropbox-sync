@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "vitest";
+import { describe, test, expect, beforeEach } from "bun:test";
 import { VaultFileStore } from "@/adapters/vault-file-store";
 import type { SyncEntry } from "@/types";
 

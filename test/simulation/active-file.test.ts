@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "vitest";
+import { describe, test, expect, beforeEach } from "bun:test";
 import { SyncSimulator, Device } from "../support/sync-simulator";
 
 describe("활성 파일 보호 시뮬레이션", () => {

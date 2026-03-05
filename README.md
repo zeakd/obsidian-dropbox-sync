@@ -51,11 +51,11 @@ Sync your Obsidian vault with Dropbox using content-hash based change detection.
 ## Development
 
 ```bash
-npm install
-npm run build      # Production build
-npm run dev        # Watch mode
-npm run typecheck  # TypeScript check
-npm test           # Run tests
+bun install
+bun run build      # Production build
+bun run dev        # Watch mode
+bun run typecheck  # TypeScript check
+bun test           # Run tests
 ```
 
 ## License

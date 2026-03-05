@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect } from "bun:test";
 import { SyncSimulator } from "../support/sync-simulator";
 
 describe("삭제 보호", () => {
