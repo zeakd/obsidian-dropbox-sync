@@ -1,8 +1,9 @@
 import type { FileSystem, RemoteStorage, SyncStateStore } from "../adapters/interfaces";
 import type { RemoteEntry, SyncPlan, SyncResult } from "../types";
 import { createPlan } from "./planner";
-import { executePlan, type ConflictStrategy, type ConflictResolver, type ExecutorConfig } from "./executor";
-import { checkDeleteGuard, type DeleteGuardResult } from "./guards";
+import type { ConflictStrategy, ConflictResolver, DeleteGuardResult } from "../types";
+import { executePlan, type ExecutorConfig } from "./executor";
+import { checkDeleteGuard } from "./guards";
 import { DropboxCursorResetError } from "../adapters/dropbox-adapter";
 import { isExcluded } from "../exclude";
 

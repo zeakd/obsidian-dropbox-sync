@@ -1,5 +1,7 @@
-import { App, Modal, Platform, PluginSettingTab, Setting, Notice, TFile } from "obsidian";
+import { App, Platform, PluginSettingTab, Setting, Notice, TFile } from "obsidian";
+import type { ConflictStrategy } from "../types";
 import type DropboxSyncPlugin from "../main";
+import { ConfirmModal } from "./confirm-modal";
 import { DEFAULT_APP_KEY, getEffectiveAppKey, isValidSyncName, sanitizeSyncName } from "../settings";
 import {
   generateCodeVerifier,
@@ -374,10 +376,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
           .addOption("manual", "Ask me")
           .setValue(this.plugin.settings.conflictStrategy)
           .onChange(async (value) => {
-            this.plugin.settings.conflictStrategy = value as
-              | "keep_both"
-              | "newest"
-              | "manual";
+            this.plugin.settings.conflictStrategy = value as ConflictStrategy;
             strategySetting.setDesc(strategyDescs[value] ?? "");
             await this.plugin.saveSettings();
           }),
@@ -513,57 +512,5 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
     const allFiles = this.app.vault.getFiles();
     const excluded = allFiles.filter((f: TFile) => isExcluded(f.path, patterns));
     setting.setDesc(`${excluded.length} file(s) excluded out of ${allFiles.length} total.`);
-  }
-}
-
-class ConfirmModal extends Modal {
-  private confirmed = false;
-  private resolve: ((confirmed: boolean) => void) | null = null;
-
-  constructor(
-    app: App,
-    private title: string,
-    private message: string,
-    private warning?: string,
-  ) {
-    super(app);
-  }
-
-  onOpen(): void {
-    const { contentEl } = this;
-    contentEl.createEl("h3", { text: this.title });
-    contentEl.createEl("p", { text: this.message });
-    if (this.warning) {
-      contentEl.createEl("p", {
-        text: this.warning,
-        cls: "mod-warning",
-      });
-    }
-
-    new Setting(contentEl)
-      .addButton((btn) =>
-        btn
-          .setButtonText("Confirm")
-          .setCta()
-          .onClick(() => {
-            this.confirmed = true;
-            this.close();
-          }),
-      )
-      .addButton((btn) =>
-        btn.setButtonText("Cancel").onClick(() => this.close()),
-      );
-  }
-
-  onClose(): void {
-    this.contentEl.empty();
-    this.resolve?.(this.confirmed);
-  }
-
-  waitForConfirmation(): Promise<boolean> {
-    return new Promise((resolve) => {
-      this.resolve = resolve;
-      this.open();
-    });
   }
 }

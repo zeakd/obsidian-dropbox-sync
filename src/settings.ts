@@ -3,6 +3,8 @@ declare const __DROPBOX_APP_KEY__: string;
 export const DEFAULT_APP_KEY: string =
   typeof __DROPBOX_APP_KEY__ !== "undefined" ? __DROPBOX_APP_KEY__ : "";
 
+import type { ConflictStrategy } from "./types";
+
 export interface PluginSettings {
   appKey: string;
   useCustomAppKey: boolean;
@@ -11,7 +13,7 @@ export interface PluginSettings {
   tokenExpiry: number;
   syncInterval: number;
   syncEnabled: boolean;
-  conflictStrategy: "keep_both" | "manual" | "newest";
+  conflictStrategy: ConflictStrategy;
   deleteProtection: boolean;
   deleteThreshold: number;
   syncName: string;

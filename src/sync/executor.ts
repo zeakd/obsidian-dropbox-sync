@@ -1,33 +1,17 @@
 import { dropboxContentHashBrowser } from "../hash.browser";
 import type { FileSystem, RemoteStorage, SyncStateStore } from "../adapters/interfaces";
-import { PathValidationError, RevConflictError, type SyncPlan, type SyncPlanItem, type SyncResult } from "../types";
+import { PathValidationError, RevConflictError, type ConflictResolver, type ConflictStrategy, type SyncPlan, type SyncPlanItem, type SyncResult } from "../types";
 import { validateDropboxPath } from "./path-validator";
 import { runWithConcurrency } from "./concurrency";
 import {
   ConflictSkippedError,
   downloadAndVerify,
   updateSyncState,
-  handleConflictKeepBoth,
-  handleConflictNewest,
-  handleConflictManual,
-  handleConflictOnUpload,
+  dispatchConflict,
 } from "./conflict-handlers";
-import type { ConflictContext2 } from "./conflict-handlers";
+import type { ConflictHandlerDeps } from "./conflict-handlers";
 
-export type ConflictStrategy = "keep_both" | "newest" | "manual";
-
-/** manual 전략에서 사용자 선택을 반환하는 콜백 */
-export type ConflictResolverResult =
-  | "local"
-  | "remote"
-  | "skip"
-  | { type: "merged"; content: Uint8Array }
-  | null;
-
-export type ConflictResolver = (
-  localPath: string,
-  context?: import("../types").ConflictContext,
-) => Promise<ConflictResolverResult>;
+export type { ConflictStrategy, ConflictResolver, ConflictResolverResult } from "../types";
 
 export interface ExecutorDeps {
   fs: FileSystem;
@@ -141,7 +125,7 @@ async function executeItem(
 ): Promise<void> {
   const { fs, remote, store } = deps;
   const { action, pathLower, localPath } = item;
-  const conflictCtx: ConflictContext2 = deps;
+  const conflictCtx: ConflictHandlerDeps = deps;
 
   switch (action.type) {
     case "upload": {
@@ -161,7 +145,7 @@ async function executeItem(
         entry = await remote.upload(localPath, data, rev);
       } catch (err) {
         if (err instanceof RevConflictError) {
-          await handleConflictOnUpload(item, conflictCtx);
+          await dispatchConflict(item, conflictCtx);
           return;
         }
         throw err;
@@ -191,18 +175,7 @@ async function executeItem(
     }
 
     case "conflict": {
-      const strategy = deps.conflictStrategy ?? "keep_both";
-      switch (strategy) {
-        case "keep_both":
-          await handleConflictKeepBoth(item, conflictCtx);
-          break;
-        case "newest":
-          await handleConflictNewest(item, conflictCtx);
-          break;
-        case "manual":
-          await handleConflictManual(item, conflictCtx);
-          break;
-      }
+      await dispatchConflict(item, conflictCtx);
       break;
     }
 

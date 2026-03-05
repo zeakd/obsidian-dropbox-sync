@@ -128,3 +128,30 @@ export class RevConflictError extends Error {
     this.name = "RevConflictError";
   }
 }
+
+/** Conflict 전략 */
+export type ConflictStrategy = "keep_both" | "newest" | "manual";
+
+/** manual 전략에서 사용자 선택 결과 */
+export type ConflictResolverResult =
+  | "local"
+  | "remote"
+  | "skip"
+  | { type: "merged"; content: Uint8Array }
+  | null;
+
+/** manual 전략에서 사용자 선택을 반환하는 콜백 */
+export type ConflictResolver = (
+  localPath: string,
+  context?: ConflictContext,
+) => Promise<ConflictResolverResult>;
+
+/** 삭제 가드 결과 */
+export interface DeleteGuardResult {
+  /** 가드 통과 여부 */
+  passed: boolean;
+  /** 삭제 대상 항목 */
+  deleteItems: SyncPlanItem[];
+  /** 삭제 항목을 제외한 나머지 플랜 */
+  filteredPlan: SyncPlan;
+}

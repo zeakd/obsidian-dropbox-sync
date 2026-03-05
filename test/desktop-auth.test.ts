@@ -3,7 +3,7 @@ import { DesktopAuth, type AuthTokens } from "@/auth/desktop-auth";
 
 // ── mock: obsidian ──
 
-const mockNotice = mock(() => {});
+const mockNotice = mock((_msg: string) => {});
 mock.module("obsidian", () => ({
   Notice: class {
     constructor(msg: string) { mockNotice(msg); }

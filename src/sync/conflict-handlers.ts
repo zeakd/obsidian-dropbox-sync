@@ -1,7 +1,7 @@
 import { dropboxContentHashBrowser } from "../hash.browser";
 import type { FileSystem, RemoteStorage, SyncStateStore } from "../adapters/interfaces";
 import type { ConflictContext, DownloadResult, SyncPlanItem } from "../types";
-import type { ConflictResolver, ConflictStrategy } from "./executor";
+import type { ConflictResolver, ConflictStrategy } from "../types";
 
 /** skip된 conflict를 구분하기 위한 내부 에러 */
 export class ConflictSkippedError extends Error {
@@ -11,8 +11,8 @@ export class ConflictSkippedError extends Error {
   }
 }
 
-/** conflict handler에 필요한 컨텍스트 */
-export interface ConflictContext2 {
+/** conflict handler에 필요한 의존성 */
+export interface ConflictHandlerDeps {
   fs: FileSystem;
   remote: RemoteStorage;
   store: SyncStateStore;
@@ -59,7 +59,7 @@ export async function updateSyncState(
 /** keep_both: 원격을 .conflict 파일로 보존, 로컬을 원격에 업로드 */
 export async function handleConflictKeepBoth(
   item: SyncPlanItem,
-  deps: ConflictContext2,
+  deps: ConflictHandlerDeps,
 ): Promise<void> {
   const { fs, remote, store } = deps;
   const { pathLower, localPath } = item;
@@ -78,7 +78,7 @@ export async function handleConflictKeepBoth(
 /** newest: mtime 비교하여 더 최신 버전으로 통일. 동률 시 keep_both fallback */
 export async function handleConflictNewest(
   item: SyncPlanItem,
-  deps: ConflictContext2,
+  deps: ConflictHandlerDeps,
 ): Promise<void> {
   const { fs, remote, store } = deps;
   const { pathLower, localPath } = item;
@@ -108,7 +108,7 @@ export async function handleConflictNewest(
 /** manual: conflictResolver 콜백으로 사용자에게 위임. 없으면 keep_both fallback */
 export async function handleConflictManual(
   item: SyncPlanItem,
-  deps: ConflictContext2,
+  deps: ConflictHandlerDeps,
 ): Promise<void> {
   const { fs, remote, store } = deps;
   const { pathLower, localPath } = item;
@@ -159,24 +159,26 @@ export async function handleConflictManual(
   }
 }
 
-/** upload 중 rev 충돌 발생 시 conflict 처리. strategy에 따라 분기 */
-export async function handleConflictOnUpload(
+/** 전략 → 핸들러 디스패치 맵 */
+type ConflictHandler = (item: SyncPlanItem, deps: ConflictHandlerDeps) => Promise<void>;
+
+const CONFLICT_HANDLERS: Record<ConflictStrategy, ConflictHandler> = {
+  keep_both: handleConflictKeepBoth,
+  newest: handleConflictNewest,
+  manual: handleConflictManual,
+};
+
+/** strategy에 따라 적절한 conflict handler를 호출 */
+export function dispatchConflict(
   item: SyncPlanItem,
-  deps: ConflictContext2,
+  deps: ConflictHandlerDeps,
 ): Promise<void> {
   const strategy = deps.conflictStrategy ?? "keep_both";
-  switch (strategy) {
-    case "newest":
-      await handleConflictNewest(item, deps);
-      break;
-    case "manual":
-      await handleConflictManual(item, deps);
-      break;
-    default:
-      await handleConflictKeepBoth(item, deps);
-      break;
-  }
+  return CONFLICT_HANDLERS[strategy](item, deps);
 }
+
+/** @deprecated dispatchConflict 사용 */
+export const handleConflictOnUpload = dispatchConflict;
 
 /**
  * 충돌 파일 경로 생성 (timestamp 포함으로 반복 충돌 시 덮어쓰기 방지).

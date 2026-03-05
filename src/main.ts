@@ -17,15 +17,17 @@ import { VaultAdapter } from "./adapters/vault-adapter";
 import { DropboxAdapter, DropboxAuthError } from "./adapters/dropbox-adapter";
 import { IndexedDBStore } from "./adapters/indexeddb-store";
 import { VaultFileStore } from "./adapters/vault-file-store";
+import type { ConflictContext, DeleteGuardResult } from "./types";
 import type { RemoteStorage, SyncStateStore } from "./adapters/interfaces";
 import { DesktopAuth } from "./auth/desktop-auth";
 import { LongpollManager } from "./sync/longpoll";
 import { EngineManager } from "./sync/engine-manager";
+import { LogManager } from "./log-manager";
 import { registerDemoCommands } from "./debug/demo-commands";
 import type { SyncEngine } from "./sync/engine";
 
-const MAX_LOG_LINES = 200;
-const LOG_BUFFER_FLUSH_SIZE = 10;
+import { summarizeActions } from "./sync/sync-reporter";
+
 const DEBOUNCE_DELAY_MS = 5000;
 
 export default class DropboxSyncPlugin extends Plugin {
@@ -35,7 +37,7 @@ export default class DropboxSyncPlugin extends Plugin {
   private syncTimerId: number | null = null;
   private abortController: AbortController | null = null;
   onAuthChange: (() => void) | null = null;
-  private logBuffer: string[] = [];
+  private logger: LogManager | null = null;
   private debounceTimerId: number | null = null;
   private lastSyncTime: number | null = null;
   private ribbonEl: HTMLElement | null = null;
@@ -47,8 +49,8 @@ export default class DropboxSyncPlugin extends Plugin {
   private longpoll: LongpollManager | null = null;
   private engineMgr: EngineManager | null = null;
 
-  private get logPath(): string {
-    return `sync-debug-${this.settings.deviceId || "unknown"}.log`;
+  private log(msg: string, data?: unknown): Promise<void> {
+    return this.logger!.log(msg, data);
   }
 
   // ── Lifecycle ──
@@ -60,6 +62,11 @@ export default class DropboxSyncPlugin extends Plugin {
       this.settings.deviceId = generateDeviceId();
       await this.saveSettings();
     }
+
+    this.logger = new LogManager(
+      this.app.vault.adapter,
+      () => `sync-debug-${this.settings.deviceId || "unknown"}.log`,
+    );
 
     this.addSettingTab(new DropboxSyncSettingTab(this.app, this));
     this.statusBar = new StatusBar(this.addStatusBarItem());
@@ -207,7 +214,7 @@ export default class DropboxSyncPlugin extends Plugin {
       this.syncing = false;
       this.abortController = null;
       this.lastSyncTime = Date.now();
-      await this.flushLogs();
+      await this.logger!.flush();
       if (cursorUpdated && this.settings.syncEnabled) {
         this.longpoll?.schedule();
       }
@@ -258,21 +265,15 @@ export default class DropboxSyncPlugin extends Plugin {
         throw: false,
       });
       if (resp.status !== 200) return null;
-      const data = resp.json as { entries: unknown[] };
-      return data.entries.filter((e: any) => e[".tag"] === "file").length;
+      const data = resp.json as { entries: Array<Record<string, unknown>> };
+      return data.entries.filter((e) => e[".tag"] === "file").length;
     } catch {
       return null;
     }
   }
 
   async readLogs(): Promise<string> {
-    await this.flushLogs();
-    try {
-      if (await this.app.vault.adapter.exists(this.logPath)) {
-        return await this.app.vault.adapter.read(this.logPath);
-      }
-    } catch { /* ignore */ }
-    return "(no logs)";
+    return this.logger!.read();
   }
 
   // ── Private: Engine ──
@@ -320,7 +321,7 @@ export default class DropboxSyncPlugin extends Plugin {
   private createEngineOptions() {
     return {
       conflictStrategy: this.settings.conflictStrategy,
-      conflictResolver: async (filePath: string, context: any) => {
+      conflictResolver: async (filePath: string, context?: ConflictContext) => {
         this.conflictIndex++;
         const modal = new ConflictModal(this.app, filePath, context, {
           index: this.conflictIndex,
@@ -330,7 +331,7 @@ export default class DropboxSyncPlugin extends Plugin {
       },
       deleteProtection: this.settings.deleteProtection,
       deleteThreshold: this.settings.deleteThreshold,
-      onDeleteGuardTriggered: async (guard: any) => {
+      onDeleteGuardTriggered: async (guard: DeleteGuardResult) => {
         const modal = new DeleteConfirmModal(this.app, guard.deleteItems);
         return modal.waitForConfirmation();
       },
@@ -510,35 +511,16 @@ export default class DropboxSyncPlugin extends Plugin {
         8000,
       );
     } else if (deletesSkipped && deletesSkipped > 0) {
-      const summary = this.summarizeActions(result.succeeded);
+      const summary = summarizeActions(result.succeeded);
       this.statusBar?.update("success", `${summary}, ${deletesSkipped} deletes skipped`);
       new Notice(`Dropbox Sync: ${summary}, ${deletesSkipped} deletions skipped by protection.`);
     } else if (result.succeeded.length > 0) {
-      const summary = this.summarizeActions(result.succeeded);
+      const summary = summarizeActions(result.succeeded);
       this.statusBar?.update("success", summary);
       new Notice(`Dropbox Sync: ${summary}`);
     } else {
       this.statusBar?.update("success", "up to date");
     }
-  }
-
-  private summarizeActions(items: { action: { type: string } }[]): string {
-    const counts: Record<string, number> = {};
-    for (const item of items) {
-      counts[item.action.type] = (counts[item.action.type] ?? 0) + 1;
-    }
-    const labels: [string, string][] = [
-      ["upload", "\u2191"],
-      ["download", "\u2193"],
-      ["conflict", "\u26A1"],
-      ["deleteLocal", "\u2193\u2717"],
-      ["deleteRemote", "\u2191\u2717"],
-    ];
-    const parts: string[] = [];
-    for (const [type, icon] of labels) {
-      if (counts[type]) parts.push(`${icon}${counts[type]}`);
-    }
-    return parts.length > 0 ? parts.join(" ") : `${items.length} synced`;
   }
 
   private async checkRemoteChanges(): Promise<{ pendingChanges: number } | null> {
@@ -549,35 +531,5 @@ export default class DropboxSyncPlugin extends Plugin {
     if (!cursor) return null;
     const result = await remote.listChanges(cursor);
     return { pendingChanges: result.entries.length };
-  }
-
-  // ── Private: Logging ──
-
-  private async log(msg: string, data?: unknown): Promise<void> {
-    const ts = new Date().toISOString();
-    const detail = data instanceof Error
-      ? `${data.name}: ${data.message}` + (data.stack ? `\n${data.stack}` : "")
-      : data !== undefined ? JSON.stringify(data) : "";
-    const line = detail ? `[${ts}] ${msg} ${detail}` : `[${ts}] ${msg}`;
-    console.log("[Dropbox Sync]", msg, data ?? "");
-    this.logBuffer.push(line);
-    if (this.logBuffer.length >= LOG_BUFFER_FLUSH_SIZE) {
-      await this.flushLogs();
-    }
-  }
-
-  private async flushLogs(): Promise<void> {
-    if (this.logBuffer.length === 0) return;
-    const toWrite = this.logBuffer.splice(0);
-    try {
-      let existing = "";
-      if (await this.app.vault.adapter.exists(this.logPath)) {
-        existing = await this.app.vault.adapter.read(this.logPath);
-      }
-      const lines = existing ? existing.split("\n").filter(Boolean) : [];
-      lines.push(...toWrite);
-      const trimmed = lines.slice(-MAX_LOG_LINES);
-      await this.app.vault.adapter.write(this.logPath, trimmed.join("\n") + "\n");
-    } catch { /* ignore log write failures */ }
   }
 }

@@ -1,13 +1,6 @@
-import type { SyncPlan, SyncPlanItem } from "../types";
+import type { DeleteGuardResult, SyncPlan } from "../types";
 
-export interface DeleteGuardResult {
-  /** 가드 통과 여부 */
-  passed: boolean;
-  /** 삭제 대상 항목 */
-  deleteItems: SyncPlanItem[];
-  /** 삭제 항목을 제외한 나머지 플랜 */
-  filteredPlan: SyncPlan;
-}
+export type { DeleteGuardResult } from "../types";
 
 /**
  * 대량 삭제 가드. 삭제 개수가 임계값을 초과하면 차단.
