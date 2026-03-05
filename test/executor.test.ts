@@ -301,11 +301,11 @@ describe("executePlan", () => {
 
   // ── path validation ──
 
-  test("upload: 금지 문자 경로 → PathValidationError로 실패", async () => {
-    await fs.write("file*.md", new TextEncoder().encode("content"));
+  test("upload: 제어문자 경로 → PathValidationError로 실패", async () => {
+    await fs.write("file\x01.md", new TextEncoder().encode("content"));
     const plan = mkPlan({
-      pathLower: "file*.md",
-      localPath: "file*.md",
+      pathLower: "file\x01.md",
+      localPath: "file\x01.md",
       action: { type: "upload", reason: "new_local" },
     });
 

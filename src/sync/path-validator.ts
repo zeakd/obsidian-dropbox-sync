@@ -3,8 +3,8 @@
  * 업로드 전 금지 문자/패턴을 검사하여 API 오류를 사전 방지한다.
  */
 
-/** 금지 문자 (Dropbox 제한) */
-const FORBIDDEN_CHARS = /[\\:*?"<>|]/;
+/** 금지 문자 (Dropbox API 실제 제한: NUL, 제어문자) */
+const FORBIDDEN_CHARS = /[\x00-\x1f\x7f]/;
 
 /**
  * Dropbox 경로 유효성 검증.

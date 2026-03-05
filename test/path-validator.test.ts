@@ -20,34 +20,27 @@ describe("validateDropboxPath", () => {
     expect(validateDropboxPath("my notes/hello world.md")).toBeNull();
   });
 
-  // ── 금지 문자 ──
+  // ── Dropbox가 허용하는 특수문자 ──
 
-  test("백슬래시 → 에러", () => {
-    expect(validateDropboxPath("notes\\file.md")).toContain("forbidden character");
+  test("물음표 → 허용", () => {
+    expect(validateDropboxPath("file?.md")).toBeNull();
   });
 
-  test("콜론 → 에러", () => {
-    expect(validateDropboxPath("notes:file.md")).toContain("forbidden character");
+  test("별표, 콜론, 꺾쇠, 파이프 → 허용", () => {
+    expect(validateDropboxPath("file*name.md")).toBeNull();
+    expect(validateDropboxPath("file:name.md")).toBeNull();
+    expect(validateDropboxPath("file<1>.md")).toBeNull();
+    expect(validateDropboxPath("file|name.md")).toBeNull();
   });
 
-  test("별표 → 에러", () => {
-    expect(validateDropboxPath("file*.md")).toContain("forbidden character");
+  // ── 금지 문자 (제어문자) ──
+
+  test("NUL → 에러", () => {
+    expect(validateDropboxPath("file\x00.md")).toContain("forbidden character");
   });
 
-  test("물음표 → 에러", () => {
-    expect(validateDropboxPath("file?.md")).toContain("forbidden character");
-  });
-
-  test("큰따옴표 → 에러", () => {
-    expect(validateDropboxPath('file".md')).toContain("forbidden character");
-  });
-
-  test("꺾쇠 → 에러", () => {
-    expect(validateDropboxPath("file<1>.md")).toContain("forbidden character");
-  });
-
-  test("파이프 → 에러", () => {
-    expect(validateDropboxPath("file|name.md")).toContain("forbidden character");
+  test("제어문자 → 에러", () => {
+    expect(validateDropboxPath("file\x01.md")).toContain("forbidden character");
   });
 
   // ── 금지 세그먼트 ──
