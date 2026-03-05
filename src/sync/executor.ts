@@ -10,7 +10,7 @@ export type ConflictStrategy = "keep_both" | "newest" | "manual";
 export type ConflictResolver = (
   localPath: string,
   context?: ConflictContext,
-) => Promise<"local" | "remote" | null>;
+) => Promise<"local" | "remote" | { type: "merged"; content: Uint8Array } | null>;
 
 export interface ExecutorDeps {
   fs: FileSystem;
@@ -301,9 +301,16 @@ async function handleConflictManual(
     const localHash = await dropboxContentHashBrowser(localData);
     const entry = await remote.upload(localPath, localData);
     await updateSyncState(store, pathLower, localPath, localHash, entry.hash ?? localHash, entry.rev);
-  } else {
+  } else if (choice === "remote") {
     await fs.write(localPath, result.data, result.metadata.serverModified);
     await updateSyncState(store, pathLower, localPath, result.verifiedHash, result.verifiedHash, result.metadata.rev);
+  } else {
+    // merged
+    const merged = choice.content;
+    await fs.write(localPath, merged);
+    const mergedHash = await dropboxContentHashBrowser(merged);
+    const entry = await remote.upload(localPath, merged);
+    await updateSyncState(store, pathLower, localPath, mergedHash, entry.hash ?? mergedHash, entry.rev);
   }
 }
 

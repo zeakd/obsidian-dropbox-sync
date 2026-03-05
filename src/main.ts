@@ -753,10 +753,13 @@ export default class DropboxSyncPlugin extends Plugin {
       remoteMtime: Date.now() - 3600000,
     });
     const choice = await modal.waitForChoice();
-    if (choice) {
+    if (!choice) {
+      new Notice("Demo: cancelled (keep_both fallback)");
+    } else if (typeof choice === "string") {
       new Notice(`Demo: "${choice}" selected`);
     } else {
-      new Notice("Demo: cancelled (keep_both fallback)");
+      const text = new TextDecoder().decode(choice.content);
+      new Notice(`Demo: merged (${text.split("\n").length} lines)`);
     }
   }
 

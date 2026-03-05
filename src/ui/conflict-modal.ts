@@ -1,7 +1,12 @@
-import { App, Modal, Setting } from "obsidian";
+import { App, Modal, Platform, Setting } from "obsidian";
 import type { ConflictContext } from "../types";
 
-export type ConflictChoice = "local" | "remote";
+export type ConflictChoice = "local" | "remote" | MergedChoice;
+
+export interface MergedChoice {
+  type: "merged";
+  content: Uint8Array;
+}
 
 export class ConflictModal extends Modal {
   private choice: ConflictChoice | null = null;
@@ -17,9 +22,10 @@ export class ConflictModal extends Modal {
 
   onOpen(): void {
     const { contentEl, context } = this;
+    const mobile = Platform.isMobile;
 
-    this.modalEl.style.maxWidth = "90vw";
-    this.modalEl.style.width = "90vw";
+    this.modalEl.style.maxWidth = mobile ? "95vw" : "90vw";
+    this.modalEl.style.width = mobile ? "95vw" : "90vw";
 
     contentEl.createEl("h3", { text: "Sync Conflict" });
     contentEl.createEl("p", {
@@ -27,14 +33,16 @@ export class ConflictModal extends Modal {
     });
 
     if (context?.localContent !== undefined && context?.remoteContent !== undefined) {
-      this.renderDiffCompare(contentEl, context.localContent, context.remoteContent);
+      this.renderDiffCompare(contentEl, context.localContent, context.remoteContent, mobile);
     } else if (context?.localData && context?.remoteData && this.isImage(this.filePath)) {
-      this.renderImageCompare(contentEl, context.localData, context.remoteData);
+      this.renderImageCompare(contentEl, context.localData, context.remoteData, mobile);
     } else if (context) {
       this.renderMetadata(contentEl, context);
     }
 
     contentEl.createEl("p", { text: "Which version do you want to keep?" });
+
+    const hasText = context?.localContent !== undefined && context?.remoteContent !== undefined;
 
     new Setting(contentEl)
       .addButton((btn) =>
@@ -48,7 +56,17 @@ export class ConflictModal extends Modal {
           this.choice = "remote";
           this.close();
         }),
-      );
+      )
+      .addExtraButton((btn) => {
+        btn.setIcon("pencil").setTooltip("Merge").onClick(() => {
+          if (hasText) {
+            this.showMergeEditor(contentEl, context!.localContent!, context!.remoteContent!);
+          }
+        });
+        if (!hasText) {
+          btn.extraSettingsEl.style.display = "none";
+        }
+      });
   }
 
   onClose(): void {
@@ -63,17 +81,80 @@ export class ConflictModal extends Modal {
     });
   }
 
-  private renderDiffCompare(el: HTMLElement, local: string, remote: string): void {
+  private showMergeEditor(parentEl: HTMLElement, local: string, remote: string): void {
+    parentEl.empty();
+
+    parentEl.createEl("h3", { text: "Merge Editor" });
+    parentEl.createEl("p", {
+      text: `"${this.filePath}" — resolve conflict markers (<<<< / ==== / >>>>)`,
+      cls: "setting-item-description",
+    });
+
+    const merged = autoMerge(local, remote);
+
+    const ta = parentEl.createEl("textarea");
+    ta.value = merged;
+    ta.style.width = "100%";
+    ta.style.height = Platform.isMobile ? "50vh" : "60vh";
+    ta.style.fontFamily = "monospace";
+    ta.style.fontSize = "12px";
+    ta.style.resize = "vertical";
+    ta.style.border = "1px solid var(--background-modifier-border)";
+    ta.style.borderRadius = "4px";
+    ta.style.padding = "8px";
+    ta.style.background = "var(--background-secondary)";
+    ta.style.color = "var(--text-normal)";
+    ta.style.tabSize = "2";
+
+    const hasConflicts = merged.includes("<<<<");
+    if (hasConflicts) {
+      const hint = parentEl.createEl("p", {
+        text: `${countMarkers(merged)} conflict(s) remaining`,
+        cls: "setting-item-description",
+      });
+      hint.style.color = "var(--text-error)";
+
+      ta.addEventListener("input", () => {
+        const n = countMarkers(ta.value);
+        if (n > 0) {
+          hint.textContent = `${n} conflict(s) remaining`;
+          hint.style.color = "var(--text-error)";
+        } else {
+          hint.textContent = "All conflicts resolved";
+          hint.style.color = "var(--text-success, var(--text-normal))";
+        }
+      });
+    }
+
+    new Setting(parentEl)
+      .addButton((btn) =>
+        btn.setButtonText("Save merged").setCta().onClick(() => {
+          this.choice = {
+            type: "merged",
+            content: new TextEncoder().encode(ta.value),
+          };
+          this.close();
+        }),
+      )
+      .addButton((btn) =>
+        btn.setButtonText("Cancel").onClick(() => {
+          this.close();
+        }),
+      );
+  }
+
+  private renderDiffCompare(el: HTMLElement, local: string, remote: string, mobile: boolean): void {
     const diff = computeLineDiff(local, remote);
+    const paneHeight = mobile ? "200px" : "400px";
 
     const container = el.createDiv();
     container.style.display = "grid";
-    container.style.gridTemplateColumns = "1fr 1fr";
+    container.style.gridTemplateColumns = mobile ? "1fr" : "1fr 1fr";
     container.style.gap = "8px";
     container.style.marginBottom = "16px";
 
     const colStyle = (div: HTMLDivElement) => {
-      div.style.maxHeight = "400px";
+      div.style.maxHeight = paneHeight;
       div.style.overflow = "auto";
       div.style.border = "1px solid var(--background-modifier-border)";
       div.style.borderRadius = "4px";
@@ -110,32 +191,34 @@ export class ConflictModal extends Modal {
       }
     }
 
-    // 동기 스크롤
-    let syncing = false;
-    const syncScroll = (source: HTMLElement, target: HTMLElement) => {
-      source.addEventListener("scroll", () => {
-        if (syncing) return;
-        syncing = true;
-        target.scrollTop = source.scrollTop;
-        syncing = false;
-      });
-    };
-    syncScroll(localPane, remotePane);
-    syncScroll(remotePane, localPane);
+    // 동기 스크롤 (데스크톱만)
+    if (!mobile) {
+      let syncing = false;
+      const syncScroll = (source: HTMLElement, target: HTMLElement) => {
+        source.addEventListener("scroll", () => {
+          if (syncing) return;
+          syncing = true;
+          target.scrollTop = source.scrollTop;
+          syncing = false;
+        });
+      };
+      syncScroll(localPane, remotePane);
+      syncScroll(remotePane, localPane);
+    }
   }
 
-  private renderImageCompare(el: HTMLElement, localData: Uint8Array, remoteData: Uint8Array): void {
+  private renderImageCompare(el: HTMLElement, localData: Uint8Array, remoteData: Uint8Array, mobile: boolean): void {
     const mime = this.guessMime(this.filePath);
 
     const container = el.createDiv();
     container.style.display = "grid";
-    container.style.gridTemplateColumns = "1fr 1fr";
+    container.style.gridTemplateColumns = mobile ? "1fr" : "1fr 1fr";
     container.style.gap = "8px";
     container.style.marginBottom = "16px";
 
     const imgStyle = (img: HTMLImageElement) => {
       img.style.maxWidth = "100%";
-      img.style.maxHeight = "300px";
+      img.style.maxHeight = mobile ? "200px" : "300px";
       img.style.objectFit = "contain";
       img.style.border = "1px solid var(--background-modifier-border)";
       img.style.borderRadius = "4px";
@@ -193,44 +276,18 @@ interface DiffEntry {
   line: string;
 }
 
-/** 간단한 줄 단위 diff (Myers 알고리즘 대신 LCS 기반) */
+/** 줄 단위 diff (LCS 기반) */
 export function computeLineDiff(local: string, remote: string): DiffEntry[] {
-  const a = local.split("\n");
-  const b = remote.split("\n");
-
-  // LCS 테이블 구축
-  const m = a.length;
-  const n = b.length;
-
-  // 메모리 효율을 위해 2행만 사용
-  let prev = new Uint16Array(n + 1);
-  let curr = new Uint16Array(n + 1);
-
-  for (let i = 1; i <= m; i++) {
-    [prev, curr] = [curr, prev];
-    curr.fill(0);
-    for (let j = 1; j <= n; j++) {
-      if (a[i - 1] === b[j - 1]) {
-        curr[j] = prev[j - 1] + 1;
-      } else {
-        curr[j] = Math.max(prev[j], curr[j - 1]);
-      }
-    }
-  }
-
-  // 역추적을 위해 전체 테이블 필요 — 큰 파일은 잘라서 처리
   const maxLines = 500;
-  const ta = a.length > maxLines ? a.slice(0, maxLines) : a;
-  const tb = b.length > maxLines ? b.slice(0, maxLines) : b;
-
-  return diffLines(ta, tb);
+  const a = local.split("\n").slice(0, maxLines);
+  const b = remote.split("\n").slice(0, maxLines);
+  return diffLines(a, b);
 }
 
 function diffLines(a: string[], b: string[]): DiffEntry[] {
   const m = a.length;
   const n = b.length;
 
-  // 전체 LCS 테이블
   const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
@@ -242,7 +299,6 @@ function diffLines(a: string[], b: string[]): DiffEntry[] {
     }
   }
 
-  // 역추적
   const result: DiffEntry[] = [];
   let i = m, j = n;
   while (i > 0 || j > 0) {
@@ -259,6 +315,58 @@ function diffLines(a: string[], b: string[]): DiffEntry[] {
   }
 
   return result.reverse();
+}
+
+// ── Auto-merge ──
+
+/** diff 기반 auto-merge. 충돌 구간은 마커로 표시. */
+export function autoMerge(local: string, remote: string): string {
+  const diff = computeLineDiff(local, remote);
+  const lines: string[] = [];
+
+  let i = 0;
+  while (i < diff.length) {
+    const entry = diff[i];
+
+    if (entry.type === "equal") {
+      lines.push(entry.line);
+      i++;
+      continue;
+    }
+
+    // removed/added 블록 수집
+    const removed: string[] = [];
+    const added: string[] = [];
+    while (i < diff.length && diff[i].type === "removed") {
+      removed.push(diff[i].line);
+      i++;
+    }
+    while (i < diff.length && diff[i].type === "added") {
+      added.push(diff[i].line);
+      i++;
+    }
+
+    if (removed.length > 0 && added.length > 0) {
+      // 양쪽 다 변경 → conflict 마커
+      lines.push("<<<< local");
+      lines.push(...removed);
+      lines.push("====");
+      lines.push(...added);
+      lines.push(">>>> remote");
+    } else if (removed.length > 0) {
+      // local에만 있는 줄 (remote에서 삭제됨) → 유지하되 사용자에게 맡김
+      lines.push(...removed);
+    } else {
+      // remote에만 있는 줄 (추가됨) → 자동 반영
+      lines.push(...added);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function countMarkers(text: string): number {
+  return (text.match(/^<<<<\s/gm) || []).length;
 }
 
 function uint8ToBase64(data: Uint8Array): string {
