@@ -17,6 +17,13 @@ import { refreshAccessToken } from "./dropbox-auth";
 const API_BASE = "https://api.dropboxapi.com/2";
 const CONTENT_BASE = "https://content.dropboxapi.com/2";
 
+/** HTTP 헤더용 ASCII-safe JSON. 비ASCII 문자를 \uXXXX 이스케이프. */
+function headerSafeJson(obj: object): string {
+  return JSON.stringify(obj).replace(/[\u0080-\uffff]/g, (c) =>
+    "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"),
+  );
+}
+
 export interface DropboxAdapterConfig {
   appKey: string;
   remotePath: string;
@@ -76,7 +83,7 @@ export class DropboxAdapter implements RemoteStorage {
 
   async download(path: string): Promise<DownloadResult> {
     const maxRetries = 3;
-    const apiArg = JSON.stringify({ path: this.toRemotePath(path) });
+    const apiArg = headerSafeJson({ path: this.toRemotePath(path) });
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       await this.ensureValidToken();
@@ -128,7 +135,7 @@ export class DropboxAdapter implements RemoteStorage {
       ? { ".tag": "update" as const, update: rev }
       : { ".tag": "overwrite" as const };
 
-    const apiArg = JSON.stringify({
+    const apiArg = headerSafeJson({
       path: this.toRemotePath(path),
       mode,
       autorename: false,
