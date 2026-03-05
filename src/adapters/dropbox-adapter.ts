@@ -40,20 +40,6 @@ export interface DropboxAdapterConfig {
 export class DropboxAdapter implements RemoteStorage {
   constructor(private config: DropboxAdapterConfig) {}
 
-  /** 429 또는 5xx → retry 대상 */
-  private isRetryable(status: number): boolean {
-    return status === 429 || (status >= 500 && status < 600);
-  }
-
-  private retryDelay(status: number, resp: { json?: unknown }, attempt: number): number {
-    if (status === 429) {
-      const body = resp.json as DropboxErrorResponse | undefined;
-      return (body?.error?.retry_after ?? 1) * 1000;
-    }
-    // 5xx: 지수 백오프 (1s, 2s, 4s)
-    return 1000 * Math.pow(2, attempt);
-  }
-
   async listChanges(cursor?: string): Promise<ListChangesResult> {
     let result: DropboxListFolderResult;
 
@@ -96,45 +82,22 @@ export class DropboxAdapter implements RemoteStorage {
   }
 
   async download(path: string): Promise<DownloadResult> {
-    const maxRetries = 3;
     const apiArg = headerSafeJson({ path: this.toRemotePath(path) });
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      await this.ensureValidToken();
+    const resp = await this.withRetry({
+      url: `${CONTENT_BASE}/files/download`,
+      method: "POST",
+      headers: { "Dropbox-API-Arg": apiArg },
+    });
 
-      const resp = await requestUrl({
-        url: `${CONTENT_BASE}/files/download`,
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.config.getAccessToken()}`,
-          "Dropbox-API-Arg": apiArg,
-        },
-        throw: false,
-      });
+    const metadata = JSON.parse(
+      resp.headers["dropbox-api-result"] ?? "{}",
+    ) as DropboxFileMetadata;
 
-      if (this.isRetryable(resp.status)) {
-        if (attempt < maxRetries) {
-          await this.sleep(this.retryDelay(resp.status, resp, attempt));
-          continue;
-        }
-        throw this.parseError(resp.status, resp.text);
-      }
-
-      if (resp.status !== 200) {
-        throw this.parseError(resp.status, resp.text);
-      }
-
-      const metadata = JSON.parse(
-        resp.headers["dropbox-api-result"] ?? "{}",
-      ) as DropboxFileMetadata;
-
-      return {
-        data: new Uint8Array(resp.arrayBuffer),
-        metadata: this.fileMetadataToEntry(metadata),
-      };
-    }
-
-    throw new Error("download failed after retries");
+    return {
+      data: new Uint8Array(resp.arrayBuffer),
+      metadata: this.fileMetadataToEntry(metadata),
+    };
   }
 
   async upload(
@@ -142,7 +105,6 @@ export class DropboxAdapter implements RemoteStorage {
     data: Uint8Array,
     rev?: string,
   ): Promise<RemoteEntry> {
-    const maxRetries = 3;
     const mode = rev
       ? { ".tag": "update" as const, update: rev }
       : { ".tag": "overwrite" as const };
@@ -155,48 +117,26 @@ export class DropboxAdapter implements RemoteStorage {
       strict_conflict: true,
     });
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      await this.ensureValidToken();
-
-      const resp = await requestUrl({
-        url: `${CONTENT_BASE}/files/upload`,
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.config.getAccessToken()}`,
-          "Dropbox-API-Arg": apiArg,
-          "Content-Type": "application/octet-stream",
-        },
-        body: data.buffer as ArrayBuffer,
-        throw: false,
-      });
-
-      if (this.isRetryable(resp.status)) {
-        if (attempt < maxRetries) {
-          await this.sleep(this.retryDelay(resp.status, resp, attempt));
-          continue;
-        }
-        throw this.parseError(resp.status, resp.text);
-      }
-
-      if (resp.status === 409) {
-        const errBody = resp.json as DropboxErrorResponse;
+    const resp = await this.withRetry({
+      url: `${CONTENT_BASE}/files/upload`,
+      method: "POST",
+      headers: {
+        "Dropbox-API-Arg": apiArg,
+        "Content-Type": "application/octet-stream",
+      },
+      body: data.buffer as ArrayBuffer,
+      on409: (errBody) => {
         if (errBody.error_summary?.includes("conflict")) {
           throw new RevConflictError(
             `Rev conflict on upload: ${path}`,
             rev ?? "",
           );
         }
-      }
+      },
+    });
 
-      if (resp.status !== 200) {
-        throw this.parseError(resp.status, resp.text);
-      }
-
-      const metadata = resp.json as DropboxFileMetadata;
-      return this.fileMetadataToEntry(metadata);
-    }
-
-    throw new Error("upload failed after retries");
+    const metadata = resp.json as DropboxFileMetadata;
+    return this.fileMetadataToEntry(metadata);
   }
 
   async delete(path: string): Promise<void> {
@@ -208,41 +148,74 @@ export class DropboxAdapter implements RemoteStorage {
   // ── private ──
 
   private async rpcCall<T>(endpoint: string, body: object): Promise<T> {
+    const resp = await this.withRetry({
+      url: `${API_BASE}${endpoint}`,
+      method: "POST",
+      contentType: "application/json",
+      body: JSON.stringify(body),
+      on409: (errBody) => {
+        if (errBody.error_summary?.includes("reset")) {
+          throw new DropboxCursorResetError("Cursor reset required");
+        }
+      },
+      on429Final: (errBody) => {
+        throw new DropboxRateLimitError(
+          `Rate limited: ${endpoint}`,
+          errBody.error?.retry_after ?? 1,
+        );
+      },
+    });
+
+    return resp.json as T;
+  }
+
+  /**
+   * 공통 retry 루프: ensureValidToken → requestUrl → retryable 판정 → 409/에러 처리.
+   */
+  private async withRetry(opts: {
+    url: string;
+    method: string;
+    headers?: Record<string, string>;
+    contentType?: string;
+    body?: string | ArrayBuffer;
+    on409?: (errBody: DropboxErrorResponse) => void;
+    on429Final?: (errBody: DropboxErrorResponse) => void;
+  }): Promise<{ status: number; json: unknown; text: string; headers: Record<string, string>; arrayBuffer: ArrayBuffer }> {
     const maxRetries = 3;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       await this.ensureValidToken();
 
       const resp = await requestUrl({
-        url: `${API_BASE}${endpoint}`,
-        method: "POST",
-        contentType: "application/json",
+        url: opts.url,
+        method: opts.method,
+        contentType: opts.contentType,
         headers: {
           Authorization: `Bearer ${this.config.getAccessToken()}`,
+          ...opts.headers,
         },
-        body: JSON.stringify(body),
+        body: opts.body,
         throw: false,
       });
 
-      if (this.isRetryable(resp.status)) {
+      // retry 판정 (429 / 5xx)
+      if (resp.status === 429 || (resp.status >= 500 && resp.status < 600)) {
         if (attempt < maxRetries) {
-          await this.sleep(this.retryDelay(resp.status, resp, attempt));
+          const delay = resp.status === 429
+            ? ((resp.json as DropboxErrorResponse | undefined)?.error?.retry_after ?? 1) * 1000
+            : 1000 * Math.pow(2, attempt);
+          await this.sleep(delay);
           continue;
         }
-        if (resp.status === 429) {
-          const errBody = resp.json as DropboxErrorResponse;
-          throw new DropboxRateLimitError(
-            `Rate limited: ${endpoint}`,
-            errBody.error?.retry_after ?? 1,
-          );
+        if (resp.status === 429 && opts.on429Final) {
+          opts.on429Final(resp.json as DropboxErrorResponse);
         }
         throw this.parseError(resp.status, resp.text);
       }
 
-      if (resp.status === 409) {
-        const errBody = resp.json as DropboxErrorResponse;
-        if (errBody.error_summary?.includes("reset")) {
-          throw new DropboxCursorResetError("Cursor reset required");
-        }
+      // 409 커스텀 핸들링
+      if (resp.status === 409 && opts.on409) {
+        opts.on409(resp.json as DropboxErrorResponse);
+        // on409가 throw하지 않았으면 일반 에러로
         throw this.parseError(resp.status, resp.text);
       }
 
@@ -250,11 +223,10 @@ export class DropboxAdapter implements RemoteStorage {
         throw this.parseError(resp.status, resp.text);
       }
 
-      return resp.json as T;
+      return resp;
     }
 
-    // unreachable, but TypeScript needs it
-    throw new Error(`rpcCall failed after ${maxRetries} retries`);
+    throw new Error("request failed after retries");
   }
 
   private refreshPromise: Promise<void> | null = null;
