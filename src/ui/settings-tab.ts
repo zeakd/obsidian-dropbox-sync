@@ -68,7 +68,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
       if (hasSyncName) {
         this.renderSyncNameChange(containerEl, this.plugin.settings.syncName);
       }
-      if (syncRunning) {
+      if (hasSyncName) {
         this.renderSyncOptions(containerEl);
       }
     }

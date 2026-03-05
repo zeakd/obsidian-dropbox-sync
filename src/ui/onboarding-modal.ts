@@ -15,19 +15,19 @@ export class OnboardingModal extends Modal {
 
     contentEl.createEl("h2", { text: "Dropbox Sync" });
     contentEl.createEl("p", {
-      text: "Obsidian vault를 Dropbox와 동기화합니다. 여러 기기에서 같은 vault를 사용할 수 있습니다.",
+      text: "Sync your Obsidian vault with Dropbox. Use the same vault across multiple devices.",
     });
 
     const steps = contentEl.createEl("ol");
     steps.style.paddingLeft = "20px";
     steps.style.lineHeight = "1.8";
 
-    steps.createEl("li", { text: "Dropbox 계정을 연결합니다." });
-    steps.createEl("li", { text: "Vault ID를 설정합니다 (Dropbox 폴더명)." });
-    steps.createEl("li", { text: "Sync를 켜면 자동으로 동기화가 시작됩니다." });
+    steps.createEl("li", { text: "Connect your Dropbox account." });
+    steps.createEl("li", { text: "Set a Vault ID (your Dropbox folder name)." });
+    steps.createEl("li", { text: "Enable sync to start syncing automatically." });
 
     contentEl.createEl("p", {
-      text: "설정에서 바로 시작할 수 있습니다.",
+      text: "You can get started right from Settings.",
       cls: "setting-item-description",
     });
 

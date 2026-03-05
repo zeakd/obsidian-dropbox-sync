@@ -6,6 +6,7 @@ export interface SyncStatusInfo {
   detail?: string;
   syncEnabled: boolean;
   lastSyncTime: number | null;
+  lastSyncSummary?: string | null;
   deviceId: string;
   version: string;
 }
@@ -18,6 +19,7 @@ export class SyncStatusModal extends Modal {
       onSyncNow: () => void;
       onToggleSync: () => void;
       onOpenSettings: () => void;
+      onViewLogs: () => void;
       checkRemote?: () => Promise<{ pendingChanges: number } | null>;
     },
   ) {
@@ -38,10 +40,10 @@ export class SyncStatusModal extends Modal {
 
     if (info.lastSyncTime) {
       const ago = this.timeAgo(info.lastSyncTime);
-      contentEl.createEl("p", {
-        text: `Last sync: ${ago}`,
-        cls: "setting-item-description",
-      });
+      const text = info.lastSyncSummary
+        ? `Last sync: ${ago} — ${info.lastSyncSummary}`
+        : `Last sync: ${ago}`;
+      contentEl.createEl("p", { text, cls: "setting-item-description" });
     }
 
     // Dropbox 실시간 상태 (비동기)
@@ -56,7 +58,7 @@ export class SyncStatusModal extends Modal {
       cls: "setting-item-description",
     });
 
-    new Setting(contentEl)
+    const btnRow = new Setting(contentEl)
       .addButton((btn) =>
         btn
           .setButtonText("Sync Now")
@@ -82,6 +84,17 @@ export class SyncStatusModal extends Modal {
             this.actions.onOpenSettings();
           }),
       );
+
+    if (info.status === "error") {
+      btnRow.addButton((btn) =>
+        btn
+          .setButtonText("View Logs")
+          .onClick(() => {
+            this.close();
+            this.actions.onViewLogs();
+          }),
+      );
+    }
   }
 
   onClose(): void {

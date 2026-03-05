@@ -40,6 +40,7 @@ export default class DropboxSyncPlugin extends Plugin {
   private logger: LogManager | null = null;
   private debounceTimerId: number | null = null;
   private lastSyncTime: number | null = null;
+  private lastSyncSummary: string | null = null;
   private ribbonEl: HTMLElement | null = null;
   private conflictIndex = 0;
   private conflictTotal = 0;
@@ -457,6 +458,7 @@ export default class DropboxSyncPlugin extends Plugin {
         detail: this.statusBar?.lastDetail,
         syncEnabled: this.settings.syncEnabled,
         lastSyncTime: this.lastSyncTime,
+        lastSyncSummary: this.lastSyncSummary,
         deviceId: this.settings.deviceId,
         version: this.manifest.version,
       },
@@ -464,6 +466,7 @@ export default class DropboxSyncPlugin extends Plugin {
         onSyncNow: () => this.syncNow(),
         onToggleSync: () => this.settings.syncEnabled ? this.stopSync() : this.startSync(),
         onOpenSettings: () => this.openSettings(),
+        onViewLogs: () => this.showLogs(),
         checkRemote: () => this.checkRemoteChanges(),
       },
     ).open();
@@ -504,6 +507,7 @@ export default class DropboxSyncPlugin extends Plugin {
       for (const f of result.failed) {
         this.log(`FAIL ${f.item.action.type} ${f.item.localPath}`, f.error);
       }
+      this.lastSyncSummary = `${result.failed.length} failed, ${result.succeeded.length} ok`;
       this.statusBar?.update("error", `${result.failed.length} failed`);
       const first = result.failed[0];
       const detail = first.error?.message?.slice(0, 100) ?? "";
@@ -513,13 +517,16 @@ export default class DropboxSyncPlugin extends Plugin {
       );
     } else if (deletesSkipped && deletesSkipped > 0) {
       const summary = summarizeActions(result.succeeded);
+      this.lastSyncSummary = `${summary}, ${deletesSkipped} deletes skipped`;
       this.statusBar?.update("success", `${summary}, ${deletesSkipped} deletes skipped`);
       new Notice(`Dropbox Sync: ${summary}, ${deletesSkipped} deletions skipped by protection.`);
     } else if (result.succeeded.length > 0) {
       const summary = summarizeActions(result.succeeded);
+      this.lastSyncSummary = summary;
       this.statusBar?.update("success", summary);
       new Notice(`Dropbox Sync: ${summary}`);
     } else {
+      this.lastSyncSummary = "up to date";
       this.statusBar?.update("success", "up to date");
     }
   }
