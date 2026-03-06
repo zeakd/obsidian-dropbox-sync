@@ -4,8 +4,7 @@
 
 Obsidian vault를 Dropbox로 동기화합니다 — 데스크톱과 모바일 모두, 자동으로.
 
-<!-- TODO: 스크린샷 — 설정 탭 전체 모습 (연결 완료 + 싱크 켜진 상태) -->
-<!-- 파일: docs/images/settings-overview.png, 권장 크기: 800px 너비 -->
+![Settings overview](docs/images/settings-overview.png)
 
 ## 기능
 
@@ -34,15 +33,13 @@ Obsidian을 열고 **Settings > Community plugins**에서 **"Dropbox Sync"**을 
 - **데스크톱**: 브라우저가 자동으로 열립니다. 권한을 승인하면 완료됩니다.
 - **모바일**: "Open Dropbox"를 탭하고, 권한을 승인한 후, 코드를 복사해서 Obsidian에 붙여넣습니다.
 
-<!-- TODO: 스크린샷 — Connect 버튼 (미연결 상태) -->
-<!-- 파일: docs/images/connect.png -->
+![Connect to Dropbox](docs/images/connect.png)
 
 ### 3. Vault ID 설정
 
 Dropbox 폴더 이름을 지정합니다 (예: `my-notes`). vault 파일이 Dropbox에 저장될 위치입니다.
 
-<!-- TODO: 스크린샷 — Vault ID 입력 화면 -->
-<!-- 파일: docs/images/vault-id.png -->
+![Vault ID](docs/images/vault-id.png)
 
 ### 4. 동기화 켜기
 
@@ -63,8 +60,7 @@ Dropbox 폴더 이름을 지정합니다 (예: `my-notes`). vault 파일이 Drop
 
 하단 상태바에 현재 상태가 표시됩니다: 동기화 중, 동기화 완료, 또는 오류.
 
-<!-- TODO: 스크린샷 — 상태바 3가지 상태 (idle / syncing / synced) -->
-<!-- 파일: docs/images/status-bar.png -->
+![Status bar](docs/images/status-bar.png)
 
 ### 충돌이 발생하면
 
@@ -110,7 +106,7 @@ attachments/
 
 | 계층 | 보호 내용 |
 |------|-----------|
-| **삭제 추적** | 명시적으로 삭제한 파일만 Dropbox에서 제거됩니다. 누락된 파일이 자동 삭제되지 않습니다. |
+| **삭제 추적** | 삭제한 파일만 Dropbox에서 제거됩니다. 데스크톱과 모바일 모두에서 삭제를 안정적으로 감지합니다. |
 | **대량 삭제 방지** | 한 번에 5개 이상의 파일을 삭제하려 하면 확인 창이 먼저 나타납니다. |
 | **Dropbox 휴지통** | 삭제된 파일은 Dropbox 휴지통에 30~180일간 보관되며 언제든 복원할 수 있습니다. |
 

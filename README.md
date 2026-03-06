@@ -4,8 +4,7 @@
 
 Sync your Obsidian vault with Dropbox — across desktop and mobile, automatically.
 
-<!-- TODO: 스크린샷 — 설정 탭 전체 모습 (연결 완료 + 싱크 켜진 상태) -->
-<!-- 파일: docs/images/settings-overview.png, 권장 크기: 800px 너비 -->
+![Settings overview](docs/images/settings-overview.png)
 
 ## What it does
 
@@ -34,15 +33,13 @@ Open **Settings > Dropbox Sync** and click **Connect to Dropbox**.
 - **Desktop**: your browser opens automatically. Authorize and you're done.
 - **Mobile**: tap "Open Dropbox", authorize, copy the code, and paste it back.
 
-<!-- TODO: 스크린샷 — Connect 버튼 (미연결 상태) -->
-<!-- 파일: docs/images/connect.png -->
+![Connect to Dropbox](docs/images/connect.png)
 
 ### 3. Set your Vault ID
 
 Choose a name for your Dropbox folder (e.g., `my-notes`). This is where your vault files will be stored on Dropbox.
 
-<!-- TODO: 스크린샷 — Vault ID 입력 화면 -->
-<!-- 파일: docs/images/vault-id.png -->
+![Vault ID](docs/images/vault-id.png)
 
 ### 4. Turn on sync
 
@@ -63,8 +60,7 @@ From now on, any file you edit, create, or delete will automatically sync to Dro
 
 The status bar at the bottom shows the current state: syncing, synced, or error.
 
-<!-- TODO: 스크린샷 — 상태바 3가지 상태 (idle / syncing / synced) -->
-<!-- 파일: docs/images/status-bar.png -->
+![Status bar](docs/images/status-bar.png)
 
 ### When there's a conflict
 
@@ -110,7 +106,7 @@ Your data is protected by three independent layers. Even if one fails, the other
 
 | Layer | Protection |
 |-------|-----------|
-| **Delete tracking** | Only files you explicitly delete are removed from Dropbox. Missing files are never auto-deleted. |
+| **Delete tracking** | Only files you delete are removed from Dropbox. The plugin detects deletions reliably across desktop and mobile. |
 | **Bulk delete guard** | If a sync would delete more than 5 files, you see a confirmation first. |
 | **Dropbox trash** | Deleted files stay in Dropbox's trash for 30–180 days and can be restored anytime. |
 
