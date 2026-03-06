@@ -14,8 +14,6 @@
 
 [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps)에 접속하여 **Create app**을 클릭합니다.
 
-![Create App](../../docs/images/dropbox-create-app.png)
-
 다음 설정을 선택합니다:
 
 | 항목 | 값 |
@@ -51,8 +49,6 @@ obsidian://dropbox-sync
 
 같은 **Settings** 탭에서 **App key** (App secret이 아님)를 찾아 복사합니다.
 
-![App Key location](../../docs/images/dropbox-app-key.png)
-
 ### 5. 플러그인에 키 입력
 
 Obsidian에서 **Settings > Dropbox Sync > Connection**으로 이동합니다:
@@ -61,8 +57,6 @@ Obsidian에서 **Settings > Dropbox Sync > Connection**으로 이동합니다:
 2. **Use custom App Key**를 켭니다
 3. App Key를 붙여넣습니다
 4. **Connect to Dropbox**를 클릭합니다
-
-![Custom App Key settings](../../docs/images/custom-app-key-settings.png)
 
 ## FAQ
 

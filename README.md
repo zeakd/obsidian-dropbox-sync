@@ -39,8 +39,6 @@ Open **Settings > Dropbox Sync** and click **Connect to Dropbox**.
 
 Choose a name for your Dropbox folder (e.g., `my-notes`). This is where your vault files will be stored on Dropbox.
 
-![Vault ID](docs/images/vault-id.png)
-
 ### 4. Turn on sync
 
 Toggle **Enable sync** on. Your vault will sync immediately.
@@ -59,8 +57,6 @@ From now on, any file you edit, create, or delete will automatically sync to Dro
 | **Someone edits on another device** | Changes appear here within seconds |
 
 The status bar at the bottom shows the current state: syncing, synced, or error.
-
-![Status bar](docs/images/status-bar.png)
 
 ### When there's a conflict
 

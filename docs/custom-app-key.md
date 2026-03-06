@@ -14,8 +14,6 @@ However, you may want to use your own Dropbox App Key if:
 
 Go to [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps) and click **Create app**.
 
-![Create App](../images/dropbox-create-app.png)
-
 Choose the following settings:
 
 | Option | Value |
@@ -51,8 +49,6 @@ This allows the desktop one-click login to work. Mobile uses a code-based flow a
 
 On the same **Settings** tab, find your **App key** (not the App secret) and copy it.
 
-![App Key location](../images/dropbox-app-key.png)
-
 ### 5. Enter the key in the plugin
 
 In Obsidian, go to **Settings > Dropbox Sync > Connection**:
@@ -61,8 +57,6 @@ In Obsidian, go to **Settings > Dropbox Sync > Connection**:
 2. Toggle **Use custom App Key** on
 3. Paste your App Key
 4. Click **Connect to Dropbox**
-
-![Custom App Key settings](../images/custom-app-key-settings.png)
 
 ## FAQ
 

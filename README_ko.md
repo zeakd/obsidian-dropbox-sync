@@ -39,8 +39,6 @@ Obsidian을 열고 **Settings > Community plugins**에서 **"Dropbox Sync"**을 
 
 Dropbox 폴더 이름을 지정합니다 (예: `my-notes`). vault 파일이 Dropbox에 저장될 위치입니다.
 
-![Vault ID](docs/images/vault-id.png)
-
 ### 4. 동기화 켜기
 
 **Enable sync**를 켭니다. vault가 즉시 동기화를 시작합니다.
@@ -59,8 +57,6 @@ Dropbox 폴더 이름을 지정합니다 (예: `my-notes`). vault 파일이 Drop
 | **다른 기기에서 편집** | 수초 내에 변경사항 반영 |
 
 하단 상태바에 현재 상태가 표시됩니다: 동기화 중, 동기화 완료, 또는 오류.
-
-![Status bar](docs/images/status-bar.png)
 
 ### 충돌이 발생하면
 
