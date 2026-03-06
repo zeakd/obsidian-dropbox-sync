@@ -1,3 +1,5 @@
+> 한국어 버전: [README_ko.md](README_ko.md)
+
 # Dropbox Sync for Obsidian
 
 Sync your Obsidian vault with Dropbox — across desktop and mobile, automatically.
@@ -134,7 +136,7 @@ bun run typecheck  # TypeScript check
 bun test           # Run tests
 ```
 
-Internal docs: `docs/obsidian-setting-api-patterns.md`, `docs/settings-ux-principles.md`
+Internal docs: moved to Obsidian vault (`inbox/dropbox-sync/`)
 
 </details>
 

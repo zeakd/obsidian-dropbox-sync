@@ -1,6 +1,8 @@
 import { App, Modal, Setting } from "obsidian";
 import type { SyncPlanItem } from "../types";
 
+const DOCS_BASE = "https://github.com/zeakd/obsidian-dropbox-sync/blob/main/docs";
+
 /**
  * 대량 삭제 확인 모달.
  * 삭제 대상 목록을 보여주고 사용자 확인을 받는다.
@@ -36,10 +38,12 @@ export class DeleteConfirmModal extends Modal {
       });
     }
 
-    contentEl.createEl("p", {
-      text: "Deleted files on Dropbox can be recovered from the Dropbox web trash (30–180 days).",
-      cls: "setting-item-description",
-    });
+    const recoveryFrag = document.createDocumentFragment();
+    recoveryFrag.appendText("Deleted files on Dropbox can be recovered from the Dropbox web trash (30\u2013180 days). ");
+    const safetyLink = recoveryFrag.createEl("a", { text: "Learn more", href: `${DOCS_BASE}/sync-safety.md` });
+    safetyLink.setAttr("target", "_blank");
+    const recoveryEl = contentEl.createEl("p", { cls: "setting-item-description" });
+    recoveryEl.appendChild(recoveryFrag);
 
     new Setting(contentEl)
       .addButton((btn) =>
