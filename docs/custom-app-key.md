@@ -22,8 +22,10 @@ Choose the following settings:
 | Option | Value |
 |--------|-------|
 | **API** | Scoped access |
-| **Access type** | Full Dropbox (or App folder, if you prefer) |
+| **Access type** | App folder |
 | **Name** | Anything you like (e.g., "My Obsidian Sync") |
+
+> **Why App folder?** With App folder access, the plugin can only read and write files inside its own folder (`Apps/YourAppName/` in your Dropbox). It cannot access any other files in your Dropbox. This is the safest option.
 
 ### 2. Set permissions
 

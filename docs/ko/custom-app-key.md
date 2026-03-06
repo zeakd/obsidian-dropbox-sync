@@ -22,8 +22,10 @@
 | 항목 | 값 |
 |------|-----|
 | **API** | Scoped access |
-| **Access type** | Full Dropbox (또는 원하시면 App folder) |
+| **Access type** | App folder |
 | **Name** | 원하는 이름 (예: "My Obsidian Sync") |
+
+> **왜 App folder인가요?** App folder로 설정하면 플러그인이 자체 폴더(`Apps/앱이름/`) 안에서만 파일을 읽고 쓸 수 있습니다. Dropbox의 다른 파일에는 접근할 수 없어 가장 안전합니다.
 
 ### 2. 권한 설정
 
