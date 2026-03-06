@@ -7,6 +7,11 @@ import { checkDeleteGuard } from "./guards";
 import { DropboxCursorResetError } from "../adapters/dropbox-adapter";
 import { isExcluded } from "../exclude";
 
+/** conflict 파일 판별 (.conflict-YYYYMMDDTHHMMSS 패턴) */
+export function isConflictFile(path: string): boolean {
+  return /\.conflict-\d{8}T\d{6}/i.test(path);
+}
+
 export interface SyncEngineDeps {
   fs: FileSystem;
   remote: RemoteStorage;
@@ -79,13 +84,18 @@ export class SyncEngine {
     return [...this.deletedPaths];
   }
 
+  /** 미소비 삭제 항목 존재 여부 */
+  hasPendingDeletes(): boolean {
+    return this.deletedPaths.size > 0;
+  }
+
   async runCycle(signal?: AbortSignal): Promise<CycleResult> {
     const { fs, remote, store } = this.deps;
     const sig = signal;
 
-    // 1. 로컬 파일 수집
+    // 1. 로컬 파일 수집 (conflict 파일 제외 — 로컬 전용 산물)
     sig?.throwIfAborted();
-    const localFiles = await fs.list();
+    const localFiles = (await fs.list()).filter((f) => !isConflictFile(f.path));
 
     // 2. 원격 변경 수집 (delta, cursor 만료 시 전체 재스캔)
     let cursor = await store.getMeta("cursor");
@@ -143,10 +153,10 @@ export class SyncEngine {
       }
     }
 
-    // 제외 패턴 적용
+    // 제외 패턴 + conflict 파일 제외
     const excludePatterns = this.options.excludePatterns ?? [];
     for (const key of fullRemoteMap.keys()) {
-      if (isExcluded(key, excludePatterns.map((p) => p.toLowerCase()))) {
+      if (isExcluded(key, excludePatterns.map((p) => p.toLowerCase())) || isConflictFile(key)) {
         fullRemoteMap.delete(key);
       }
     }

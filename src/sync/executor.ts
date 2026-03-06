@@ -30,6 +30,8 @@ export interface ExecutorConfig {
   onProgress?: (completed: number, total: number) => void;
   /** conflict 직렬 실행 전 호출. conflict 총 수 전달. */
   onConflictCount?: (count: number) => void;
+  /** deleteLocal 실행 직전 호출. vault 이벤트에서 구분하기 위해 pathLower 전달. */
+  onBeforeDeleteLocal?: (pathLower: string) => void;
 }
 
 /** 내부 함수에서 사용하는 통합 컨텍스트 */
@@ -161,6 +163,7 @@ async function executeItem(
     }
 
     case "deleteLocal": {
+      deps.onBeforeDeleteLocal?.(pathLower);
       await fs.delete(localPath);
       await store.deleteEntry(pathLower);
       break;

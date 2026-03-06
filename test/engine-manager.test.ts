@@ -149,6 +149,23 @@ describe("EngineManager", () => {
     expect(mgr.getOrCreate().getDeleteLog()).toEqual([]);
   });
 
+  // ── hasPendingDeletes ──
+
+  test("hasPendingDeletes: 삭제 로그 없으면 false", () => {
+    mgr.getOrCreate();
+    expect(mgr.hasPendingDeletes()).toBe(false);
+  });
+
+  test("hasPendingDeletes: 삭제 로그 있으면 true", () => {
+    const engine = mgr.getOrCreate();
+    engine.trackDelete("note.md");
+    expect(mgr.hasPendingDeletes()).toBe(true);
+  });
+
+  test("hasPendingDeletes: 엔진 없으면 false", () => {
+    expect(mgr.hasPendingDeletes()).toBe(false);
+  });
+
   // ── getOptions 동적 반영 ──
 
   test("reset 후 getOrCreate는 최신 옵션 사용", () => {

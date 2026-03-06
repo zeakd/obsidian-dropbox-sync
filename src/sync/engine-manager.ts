@@ -51,6 +51,10 @@ export class EngineManager {
     return this.deps?.remote ?? null;
   }
 
+  hasPendingDeletes(): boolean {
+    return this.engine?.hasPendingDeletes() ?? false;
+  }
+
   persistDeleteLog(): void {
     if (!this.engine || !this.deps?.store) return;
     const log = this.engine.getDeleteLog();

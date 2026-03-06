@@ -44,6 +44,7 @@ export default class DropboxSyncPlugin extends Plugin {
   private ribbonEl: HTMLElement | null = null;
   private conflictIndex = 0;
   private conflictTotal = 0;
+  private syncDeletedByEngine = new Set<string>();
 
   // ── 모듈 ──
   private auth: DesktopAuth | null = null;
@@ -217,10 +218,14 @@ export default class DropboxSyncPlugin extends Plugin {
       new Notice(`Dropbox Sync error: ${(e as Error).message}`);
     } finally {
       this.syncing = false;
+      this.syncDeletedByEngine.clear();
       this.abortController = null;
       this.lastSyncTime = Date.now();
       await this.logger?.flush();
-      if (cursorUpdated && this.settings.syncEnabled) {
+      // 미소비 삭제가 있으면 후속 싱크 스케줄 (싱크 중 사용자 삭제 처리)
+      if (this.engineMgr?.hasPendingDeletes() && this.settings.syncEnabled) {
+        this.scheduleDebouncedSync();
+      } else if (cursorUpdated && this.settings.syncEnabled) {
         this.longpoll?.schedule();
       }
     }
@@ -347,6 +352,9 @@ export default class DropboxSyncPlugin extends Plugin {
         this.conflictTotal = count;
         this.conflictIndex = 0;
       },
+      onBeforeDeleteLocal: (pathLower: string) => {
+        this.syncDeletedByEngine.add(pathLower);
+      },
       onProgress: (completed: number, total: number) => {
         const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
         this.statusBar?.update("syncing", `${pct}% · ${completed}/${total}`);
@@ -374,7 +382,9 @@ export default class DropboxSyncPlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
         if (!(file instanceof TFile)) return;
-        engine.trackDelete(file.path.toLowerCase());
+        const p = file.path.toLowerCase();
+        if (this.syncDeletedByEngine.delete(p)) return; // 싱크 엔진이 지운 거면 무시
+        engine.trackDelete(p);
         this.engineMgr?.persistDeleteLog();
         if (!this.syncing) this.scheduleDebouncedSync();
       }),

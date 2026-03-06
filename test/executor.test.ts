@@ -158,6 +158,32 @@ describe("executePlan", () => {
     expect(await store.getEntry("test.md")).toBeNull();
   });
 
+  test("deleteLocal: onBeforeDeleteLocal 콜백 호출", async () => {
+    await fs.write("test.md", new TextEncoder().encode("x"));
+    await store.setEntry({
+      pathLower: "test.md",
+      localPath: "test.md",
+      baseLocalHash: "h",
+      baseRemoteHash: "h",
+      rev: "r",
+      lastSynced: 1000,
+    });
+
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: { type: "deleteLocal", reason: "deleted_on_remote" },
+    });
+
+    const deletedPaths: string[] = [];
+    const config: ExecutorConfig = {
+      onBeforeDeleteLocal: (p) => deletedPaths.push(p),
+    };
+
+    await executePlan(plan, deps, config);
+    expect(deletedPaths).toEqual(["test.md"]);
+  });
+
   // ── deleteRemote ──
 
   test("deleteRemote: 원격 파일 삭제", async () => {
