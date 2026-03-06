@@ -420,8 +420,8 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName("Advanced").setHeading();
 
     new Setting(containerEl)
-      .setName("Sync on file create/delete/rename")
-      .setDesc("Trigger sync when files are created, deleted, or renamed. File edits always trigger sync.")
+      .setName("Sync on file create")
+      .setDesc("Trigger sync when new files are created. Edits, deletions, and renames always trigger sync.")
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.syncOnCreateDeleteRename)

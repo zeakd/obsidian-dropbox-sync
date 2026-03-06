@@ -376,7 +376,7 @@ export default class DropboxSyncPlugin extends Plugin {
         if (this.syncing || !(file instanceof TFile)) return;
         engine.trackDelete(file.path.toLowerCase());
         this.engineMgr?.persistDeleteLog();
-        if (this.settings.syncOnCreateDeleteRename) this.scheduleDebouncedSync();
+        this.scheduleDebouncedSync();
       }),
     );
 
@@ -385,7 +385,7 @@ export default class DropboxSyncPlugin extends Plugin {
         if (this.syncing || !(file instanceof TFile)) return;
         engine.trackDelete(oldPath.toLowerCase());
         this.engineMgr?.persistDeleteLog();
-        if (this.settings.syncOnCreateDeleteRename) this.scheduleDebouncedSync();
+        this.scheduleDebouncedSync();
       }),
     );
 
