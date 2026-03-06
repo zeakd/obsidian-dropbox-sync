@@ -485,13 +485,19 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
     const isConnected = !!this.plugin.settings.refreshToken;
 
     if (DEFAULT_APP_KEY) {
+      const appKeyDesc = (() => {
+        const frag = document.createDocumentFragment();
+        frag.appendText(isConnected
+          ? "Disconnect first to change App Key. "
+          : "Override the built-in App Key with your own. ");
+        const link = frag.createEl("a", { text: "Setup guide", href: `${DOCS_BASE}/custom-app-key.md` });
+        link.setAttr("target", "_blank");
+        return frag;
+      })();
+
       new Setting(containerEl)
         .setName("Use custom App Key")
-        .setDesc(
-          isConnected
-            ? "Disconnect first to change App Key."
-            : "Override the built-in App Key with your own.",
-        )
+        .setDesc(appKeyDesc)
         .addToggle((toggle) =>
           toggle
             .setValue(this.plugin.settings.useCustomAppKey)

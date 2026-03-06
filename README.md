@@ -100,6 +100,7 @@ The settings panel shows how many files are currently excluded.
 | **Sync interval** | 60 seconds | How often to check for changes as a fallback. Usually not needed — changes are detected in real time. |
 | **Delete protection** | On | Ask for confirmation before deleting many files at once. [Details](docs/sync-safety.md) |
 | **Delete threshold** | 5 | How many deletions trigger the confirmation. |
+| **Custom App Key** | Off | Use your own Dropbox app instead of the built-in one. [Setup guide](docs/custom-app-key.md) |
 
 ## Safety
 
