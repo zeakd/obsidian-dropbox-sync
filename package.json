@@ -1,6 +1,6 @@
 {
   "name": "obsidian-dropbox-sync",
-  "version": "0.4.20",
+  "version": "0.4.21",
   "description": "Dropbox sync plugin for Obsidian",
   "main": "main.js",
   "scripts": {
