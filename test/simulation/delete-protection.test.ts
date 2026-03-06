@@ -24,7 +24,7 @@ describe("삭제 보호", () => {
     expect(b.hasFile("note.md")).toBe(false);
   });
 
-  test("의도하지 않은 부재 → download 복구", async () => {
+  test("삭제 이벤트 누락 → catch-up이 삭제 의도 감지 → deleteRemote", async () => {
     const sim = new SyncSimulator();
     const a = sim.addDevice("A");
 
@@ -32,14 +32,16 @@ describe("삭제 보호", () => {
     await a.editFile("note.md", "content");
     await a.sync();
 
-    // 직접 fs에서 삭제 (삭제 이벤트 미기록 — 앱 재시작/빈 볼트 시뮬레이션)
+    // 직접 fs에서 삭제 (삭제 이벤트 미기록 — 모바일 vault 이벤트 누락 시뮬레이션)
     await a.fs.delete("note.md");
     // 삭제 로그에 기록하지 않음!
 
-    // sync → 원격에서 복구
-    await a.sync();
-    expect(a.hasFile("note.md")).toBe(true);
-    expect(await a.readFile("note.md")).toBe("content");
+    // sync → catch-up이 감지 → deleteRemote
+    const { plan } = await a.sync();
+    const actions = plan.items.filter((i) => i.pathLower === "note.md");
+    expect(actions).toHaveLength(1);
+    expect(actions[0].action.type).toBe("deleteRemote");
+    expect(sim.remote.has("note.md")).toBe(false);
   });
 
   test("삭제 후 sync 전에 앱 재시작 (삭제 로그 복원)", async () => {

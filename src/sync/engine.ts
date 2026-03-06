@@ -163,13 +163,26 @@ export class SyncEngine {
 
     const fullRemoteEntries = Array.from(fullRemoteMap.values());
 
-    // 5. 동기화 계획 생성 (삭제 의도 전달)
+    // 5. catch-up: base에 있지만 로컬에 없는 파일 → 삭제 의도 보완
+    //    vault 이벤트가 누락된 경우(모바일 등) 안전망 역할
+    const localPathSet = new Set(localFiles.map((f) => f.pathLower));
+    for (const base of baseEntries) {
+      if (
+        !localPathSet.has(base.pathLower) &&
+        !this.deletedPaths.has(base.pathLower) &&
+        fullRemoteMap.has(base.pathLower)
+      ) {
+        this.deletedPaths.add(base.pathLower);
+      }
+    }
+
+    // 6. 동기화 계획 생성 (삭제 의도 전달)
     sig?.throwIfAborted();
     const plan = createPlan(localFiles, fullRemoteEntries, baseEntries, {
       localDeletedPaths: this.deletedPaths,
     });
 
-    // 6. 삭제 가드 적용
+    // 7. 삭제 가드 적용
     const guard = checkDeleteGuard(
       plan,
       this.options.deleteThreshold ?? 5,
@@ -194,7 +207,7 @@ export class SyncEngine {
       }
     }
 
-    // 7. 계획 실행
+    // 8. 계획 실행
     sig?.throwIfAborted();
     const executorConfig: ExecutorConfig = {
       conflictStrategy: this.options.conflictStrategy,
@@ -207,7 +220,7 @@ export class SyncEngine {
     };
     const result = await executePlan(planToExecute, { fs, remote, store }, executorConfig);
 
-    // 8. 모두 성공 시에만 cursor 갱신 (deferred도 미완료 취급)
+    // 9. 모두 성공 시에만 cursor 갱신 (deferred도 미완료 취급)
     if (result.failed.length === 0 && deletesSkipped === 0 && result.deferred.length === 0) {
       await store.setMeta("cursor", latestCursor);
     }
