@@ -373,19 +373,19 @@ export default class DropboxSyncPlugin extends Plugin {
 
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
-        if (this.syncing || !(file instanceof TFile)) return;
+        if (!(file instanceof TFile)) return;
         engine.trackDelete(file.path.toLowerCase());
         this.engineMgr?.persistDeleteLog();
-        this.scheduleDebouncedSync();
+        if (!this.syncing) this.scheduleDebouncedSync();
       }),
     );
 
     this.registerEvent(
       this.app.vault.on("rename", (file, oldPath) => {
-        if (this.syncing || !(file instanceof TFile)) return;
+        if (!(file instanceof TFile)) return;
         engine.trackDelete(oldPath.toLowerCase());
         this.engineMgr?.persistDeleteLog();
-        this.scheduleDebouncedSync();
+        if (!this.syncing) this.scheduleDebouncedSync();
       }),
     );
 
