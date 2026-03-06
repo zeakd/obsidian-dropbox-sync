@@ -97,7 +97,7 @@ export default class DropboxSyncPlugin extends Plugin {
     }
 
     // UI: 리본 + 상태 바
-    this.ribbonEl = this.addRibbonIcon("refresh-cw", "Dropbox Sync", () => this.showStatusModal());
+    this.ribbonEl = this.addRibbonIcon("refresh-cw", "Dropbox Sync", () => this.syncNow());
     this.ribbonEl.addEventListener("contextmenu", (evt) => {
       evt.preventDefault();
       this.showContextMenu(evt);
