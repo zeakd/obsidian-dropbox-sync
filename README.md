@@ -4,8 +4,6 @@
 
 Sync your Obsidian vault with Dropbox — across desktop and mobile, automatically.
 
-![Settings overview](docs/images/settings-overview.png)
-
 ## What it does
 
 - **Keeps your vault in sync** across all your devices via Dropbox
@@ -32,8 +30,6 @@ Open **Settings > Dropbox Sync** and click **Connect to Dropbox**.
 
 - **Desktop**: your browser opens automatically. Authorize and you're done.
 - **Mobile**: tap "Open Dropbox", authorize, copy the code, and paste it back.
-
-![Connect to Dropbox](docs/images/connect.png)
 
 ### 3. Set your Vault ID
 

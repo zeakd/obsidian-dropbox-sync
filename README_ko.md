@@ -4,8 +4,6 @@
 
 Obsidian vault를 Dropbox로 동기화합니다 — 데스크톱과 모바일 모두, 자동으로.
 
-![Settings overview](docs/images/settings-overview.png)
-
 ## 기능
 
 - **Vault를 동기화합니다** — 모든 기기에서 Dropbox를 통해 파일을 최신 상태로 유지합니다
@@ -32,8 +30,6 @@ Obsidian을 열고 **Settings > Community plugins**에서 **"Dropbox Sync"**을 
 
 - **데스크톱**: 브라우저가 자동으로 열립니다. 권한을 승인하면 완료됩니다.
 - **모바일**: "Open Dropbox"를 탭하고, 권한을 승인한 후, 코드를 복사해서 Obsidian에 붙여넣습니다.
-
-![Connect to Dropbox](docs/images/connect.png)
 
 ### 3. Vault ID 설정
 
