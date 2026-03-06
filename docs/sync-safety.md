@@ -1,51 +1,48 @@
 # Sync Safety
 
-Syncing file deletions across devices is inherently dangerous. A bug or misunderstanding can cascade a single deletion into data loss on every device. This plugin uses three independent layers to prevent that.
+When you delete a file on one device, the sync plugin needs to delete it on your other devices too. This is risky — if something goes wrong, files could be lost everywhere. That's why this plugin uses three independent safety layers.
 
-## Layer 1: Delete tracking
+## Layer 1: Only intentional deletions are synced
 
-The plugin does **not** infer deletions from missing files. Instead, it explicitly tracks delete events:
+The plugin only deletes files from Dropbox when it **sees you delete them in Obsidian**. It keeps a log of every file you delete or rename.
 
-- When you delete a file in Obsidian, the plugin records it in a local delete log
-- When you rename a file, the old path is recorded as a deletion
-- On the next sync, only paths in the delete log are removed from Dropbox
+What this means in practice:
 
-This means:
-- A file missing because of a partial sync is **not** deleted remotely
-- A file excluded by a pattern is **not** deleted remotely
-- Only intentional, observed deletions propagate
+- If a file is missing because of a glitch or partial sync, it will **not** be deleted from Dropbox — it will be downloaded back instead
+- If you exclude a file from sync using patterns, it will **not** be deleted from Dropbox
+- Only files you deliberately delete (or rename) in Obsidian are removed from Dropbox
 
-The delete log persists across sessions, so deletions aren't lost if you close Obsidian before syncing.
+## Layer 2: Confirmation before bulk deletions
 
-## Layer 2: Bulk delete guard
+If a sync would delete more than 5 files at once, a confirmation window appears showing exactly which files will be deleted.
 
-If a single sync cycle would delete more files than a configurable threshold (default: 5), the plugin pauses and shows a confirmation modal:
+<!-- TODO: 스크린샷 — 대량 삭제 확인 모달 (파일 리스트 + Delete/Skip 버튼) -->
+<!-- 파일: docs/images/delete-guard.png -->
 
-- The full list of files to be deleted (up to 20 shown, with a count for the rest)
-- Whether each deletion targets local or remote
-- **Delete** to proceed, or **Skip deletions** to sync everything else
+This catches situations like:
 
-This catches scenarios like:
 - Accidentally deleting a folder
-- A state corruption causing the plugin to think many files were deleted
-- First sync after changing the Vault ID (which could look like mass deletion)
+- Something going wrong with the sync state
+- Switching to a different Vault ID (which could look like everything was deleted)
 
-Configure in Settings > Delete protection and Delete threshold.
+You can click **Delete** to proceed if the deletions are intentional, or **Skip deletions** to sync everything else and leave the files alone.
 
-## Layer 3: Dropbox trash
+The threshold (default: 5 files) can be changed in **Settings > Delete threshold**.
 
-Even after a file is deleted through the Dropbox API, it remains in Dropbox's trash:
+## Layer 3: Dropbox keeps deleted files
 
-- **Dropbox Basic/Plus**: recoverable for 30 days
-- **Dropbox Professional/Business**: recoverable for 180 days
+Even after a file is deleted from Dropbox, it's not gone forever. Dropbox keeps deleted files in its trash:
 
-To recover: log into [dropbox.com](https://www.dropbox.com), navigate to Deleted files, and restore.
+- **Free and Plus plans**: 30 days
+- **Professional and Business plans**: 180 days
 
-## Deferred files
+To recover a deleted file, go to [dropbox.com](https://www.dropbox.com), click **Deleted files** in the sidebar, find your file, and click **Restore**.
 
-Some files are "deferred" during a sync cycle — they are skipped and not counted as failures:
+## What are "deferred" files?
 
-- Files currently open and being edited (to avoid mid-edit conflicts)
-- Conflict files where the user chose "Later"
+Sometimes the plugin skips a file during sync instead of processing it:
 
-Deferred files are retried on the next sync cycle. The sync result shows the deferred count so you know nothing was silently lost.
+- A file you're currently editing won't be overwritten mid-edit
+- A conflict you chose to deal with "later" is deferred to the next sync
+
+These files aren't lost — they'll be handled on the next sync cycle. The sync result tells you if any files were deferred.

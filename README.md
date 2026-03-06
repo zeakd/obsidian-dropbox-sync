@@ -1,106 +1,141 @@
 # Dropbox Sync for Obsidian
 
-Sync your Obsidian vault with Dropbox. Works on desktop and mobile, detects changes accurately using content hashes, and keeps your data safe with three layers of delete protection.
+Sync your Obsidian vault with Dropbox — across desktop and mobile, automatically.
 
-## Features
+<!-- TODO: 스크린샷 — 설정 탭 전체 모습 (연결 완료 + 싱크 켜진 상태) -->
+<!-- 파일: docs/images/settings-overview.png, 권장 크기: 800px 너비 -->
 
-### Accurate sync with content hashing
+## What it does
 
-Changes are detected using Dropbox's `content_hash` algorithm — a block-level hash of file contents. This means no false positives from timestamp drift or timezone differences. Only files that actually changed get synced.
-
-### Real-time change detection
-
-The plugin uses Dropbox's longpoll API to detect remote changes in real-time. When someone edits a file on another device, this device picks it up within seconds — no need to wait for the next sync interval.
-
-Local file edits trigger a sync after a 5-second debounce, so your changes reach Dropbox quickly without overwhelming the API.
-
-### Smart conflict resolution
-
-When the same file is edited on two devices before syncing, you have three options:
-
-- **Keep both** (default) — saves the remote version as a `.conflict` file alongside your local version
-- **Newest wins** — automatically keeps whichever version was modified more recently
-- **Ask me** — opens a side-by-side merge modal where you can choose per section
-
-The merge modal shows a diff-style view for text files and a visual comparison for images. You can pick local, remote, or both for each conflicting section. [Learn more about conflict resolution](docs/conflict-resolution.md)
-
-### Three layers of delete protection
-
-Syncing deletions is risky — one mistake can wipe files across all devices. This plugin uses three independent safety layers:
-
-1. **Delete tracking** — only files explicitly deleted in Obsidian are removed remotely. Missing files (e.g., from a partial sync) are never auto-deleted.
-2. **Bulk delete guard** — if a sync would delete more files than a threshold (default: 5), a confirmation modal shows the full list before proceeding.
-3. **Dropbox trash** — even after deletion, files are recoverable from Dropbox's web trash for 30-180 days.
-
-[Learn more about sync safety](docs/sync-safety.md)
-
-### Selective sync
-
-Exclude files from syncing using glob patterns. Useful for large attachments, temporary files, or workspace-specific configs.
-
-Examples: `*.pdf`, `attachments/`, `.obsidian/workspace*`
-
-The settings panel shows a live count of how many files are excluded.
-
-### Works on mobile
-
-Full support for iOS and Android. The plugin uses a file-based state storage fallback on iOS where IndexedDB is unreliable. Authentication works via a two-step code flow on mobile (one-click OAuth on desktop).
+- **Keeps your vault in sync** across all your devices via Dropbox
+- **Detects changes instantly** — edits, deletions, and renames sync within seconds
+- **Handles conflicts safely** — when the same file is edited on two devices, you choose what to keep
+- **Protects against accidental deletion** — three safety layers prevent data loss
 
 ## Getting started
 
-### Install
+### 1. Install the plugin
 
-**Community Plugins (recommended):**
+Open Obsidian, go to **Settings > Community plugins**, search for **"Dropbox Sync"**, and click **Install**, then **Enable**.
 
-Settings > Community plugins > Search "Dropbox Sync" > Install > Enable
+<details>
+<summary>Manual install (advanced)</summary>
 
-**Manual:**
+Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/zeakd/obsidian-dropbox-sync/releases/latest). Place them in your vault's `.obsidian/plugins/dropbox-sync/` folder and restart Obsidian.
 
-Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/zeakd/obsidian-dropbox-sync/releases/latest). Place them in `.obsidian/plugins/dropbox-sync/` and reload Obsidian.
+</details>
 
-### Connect
+### 2. Connect to Dropbox
 
-1. Open Settings > Dropbox Sync
-2. Click **Connect to Dropbox** (desktop opens browser automatically; mobile shows a two-step code flow)
-3. Set a **Vault ID** — this becomes your Dropbox folder name (e.g., `my-vault` syncs to `/my-vault/`)
-4. Toggle **Enable sync** on
+Open **Settings > Dropbox Sync** and click **Connect to Dropbox**.
 
-That's it. Your vault will sync immediately and continue syncing on file changes.
+- **Desktop**: your browser opens automatically. Authorize and you're done.
+- **Mobile**: tap "Open Dropbox", authorize, copy the code, and paste it back.
 
-## Settings
+<!-- TODO: 스크린샷 — Connect 버튼 (미연결 상태) -->
+<!-- 파일: docs/images/connect.png -->
 
-| Setting | Default | Description |
+### 3. Set your Vault ID
+
+Choose a name for your Dropbox folder (e.g., `my-notes`). This is where your vault files will be stored on Dropbox.
+
+<!-- TODO: 스크린샷 — Vault ID 입력 화면 -->
+<!-- 파일: docs/images/vault-id.png -->
+
+### 4. Turn on sync
+
+Toggle **Enable sync** on. Your vault will sync immediately.
+
+From now on, any file you edit, create, or delete will automatically sync to Dropbox. Changes from other devices are picked up in real time.
+
+## Daily use
+
+### Syncing
+
+| Action | What happens |
+|--------|-------------|
+| **Edit a file** | Syncs to Dropbox after 5 seconds |
+| **Delete or rename a file** | Syncs to Dropbox after 5 seconds |
+| **Click the sync icon** (left sidebar) | Syncs immediately |
+| **Someone edits on another device** | Changes appear here within seconds |
+
+The status bar at the bottom shows the current state: syncing, synced, or error.
+
+<!-- TODO: 스크린샷 — 상태바 3가지 상태 (idle / syncing / synced) -->
+<!-- 파일: docs/images/status-bar.png -->
+
+### When there's a conflict
+
+If the same file was edited on two devices before syncing, the plugin needs to decide which version to keep. You can choose your preferred strategy in Settings:
+
+| Strategy | What happens |
+|----------|-------------|
+| **Keep both** (default) | Both versions are saved. The other device's version gets a `.conflict` suffix. |
+| **Keep newest** | The more recently edited version wins automatically. |
+| **Ask me** | A side-by-side comparison opens so you can pick what to keep. |
+
+Read more: [How conflict resolution works](docs/conflict-resolution.md)
+
+### Excluding files from sync
+
+Don't want to sync PDFs, images, or certain folders? Go to **Settings > Exclude patterns** and add patterns like:
+
+```
+*.pdf
+attachments/
+.obsidian/workspace*
+```
+
+The settings panel shows how many files are currently excluded.
+
+## Settings reference
+
+| Setting | Default | What it does |
 |---------|---------|-------------|
-| **Vault ID** | — | Dropbox folder name for this vault. Required. |
-| **Enable sync** | off | Toggle automatic syncing on/off. |
-| **Conflict strategy** | Keep both | `Keep both`, `Keep newest`, or `Ask me`. [Details](docs/conflict-resolution.md) |
-| **Exclude patterns** | `.obsidian/workspace*` | Glob patterns for files to skip. One per line. |
-| **Sync on create/delete/rename** | off | Also trigger sync on file creation, deletion, and rename. Edits always trigger sync. |
-| **Sync interval** | 60s | Fallback polling interval. Longpoll handles most real-time detection. |
-| **Delete protection** | on | Show confirmation before bulk deletions. [Details](docs/sync-safety.md) |
-| **Delete threshold** | 5 | Number of deletions that triggers the confirmation. |
+| **Vault ID** | — | Your Dropbox folder name. Required to start syncing. |
+| **Enable sync** | Off | Turns automatic syncing on or off. |
+| **Conflict strategy** | Keep both | How to handle files edited on multiple devices. [Details](docs/conflict-resolution.md) |
+| **Exclude patterns** | `.obsidian/workspace*` | Files matching these patterns won't sync. |
+| **Sync on file create** | Off | Also sync when new files are created (edits and deletions always sync). |
+| **Sync interval** | 60 seconds | How often to check for changes as a fallback. Usually not needed — changes are detected in real time. |
+| **Delete protection** | On | Ask for confirmation before deleting many files at once. [Details](docs/sync-safety.md) |
+| **Delete threshold** | 5 | How many deletions trigger the confirmation. |
 
-## Sync status
+## Safety
 
-Click the ribbon icon or status bar to see:
+Your data is protected by three independent layers. Even if one fails, the others catch it.
 
-- Current sync state and last sync summary (e.g., "2 uploads, 1 download")
-- Pending remote changes (checked live against Dropbox)
-- Quick actions: Sync Now, Start/Stop, Settings, View Logs (on error)
+| Layer | Protection |
+|-------|-----------|
+| **Delete tracking** | Only files you explicitly delete are removed from Dropbox. Missing files are never auto-deleted. |
+| **Bulk delete guard** | If a sync would delete more than 5 files, you see a confirmation first. |
+| **Dropbox trash** | Deleted files stay in Dropbox's trash for 30–180 days and can be restored anytime. |
 
-## Troubleshooting
+Read more: [How sync safety works](docs/sync-safety.md)
 
-See [Troubleshooting guide](docs/troubleshooting.md) for common issues and solutions.
+## Need help?
 
-## Development
+See the [Troubleshooting guide](docs/troubleshooting.md) for common issues, or check the logs:
+
+- **Command palette** > "Dropbox Sync: View sync logs"
+- **Settings** > Dropbox Sync > Troubleshooting > **View Logs**
+
+---
+
+<details>
+<summary>For developers</summary>
 
 ```bash
 bun install
 bun run build      # Production build
 bun run dev        # Watch mode
 bun run typecheck  # TypeScript check
-bun test           # Run tests (288 tests)
+bun test           # Run tests
 ```
+
+Internal docs: `docs/obsidian-setting-api-patterns.md`, `docs/settings-ux-principles.md`
+
+</details>
 
 ## License
 

@@ -1,49 +1,55 @@
 # Conflict Resolution
 
-A conflict occurs when the same file is modified on two devices before they sync. For example, you edit `notes/idea.md` on your laptop and your phone, then both devices try to sync.
+A conflict happens when you edit the same file on two devices before they've had a chance to sync. For example, you edit a note on your laptop, then edit the same note on your phone before the laptop syncs.
 
-## Strategies
+## Choosing a strategy
 
-Choose a strategy in Settings > Dropbox Sync > Conflict strategy.
+Go to **Settings > Dropbox Sync > Conflict strategy** to pick how conflicts are handled.
 
 ### Keep both (default)
 
-Both versions are preserved. The remote version is saved alongside your local file with a `.conflict` suffix:
+Both versions are saved. Your local version stays as-is, and the other device's version is saved next to it with a `.conflict` suffix:
 
 ```
-notes/idea.md                          ← your local version (unchanged)
-notes/idea.conflict-20260306T143200.md ← the remote version
+notes/idea.md                          ← your version (untouched)
+notes/idea.conflict-20260306T143200.md ← the other device's version
 ```
 
-The timestamp in the filename prevents overwriting if multiple conflicts occur for the same file. You can manually merge and delete the `.conflict` file at your leisure.
+You can compare them at your own pace, merge what you need, and delete the `.conflict` file when done.
 
 ### Keep newest
 
-The version with the more recent modification time wins automatically. The other version is silently overwritten.
+The version that was edited most recently wins. The older version is overwritten.
 
-This is convenient but can lose edits if both devices made meaningful changes. Best for vaults where files are typically edited on one device at a time.
+This is the simplest option, but it can lose changes if both devices made important edits. Best when you typically only edit on one device at a time.
 
-### Ask me (manual merge)
+### Ask me
 
-A modal opens showing both versions side by side. The experience differs by file type:
+A comparison window opens so you can decide section by section.
 
-**Text files** — a section-by-section diff view:
+<!-- TODO: 스크린샷 — 텍스트 파일 머지 모달 (conflict 블록 + 선택 상태) -->
+<!-- 파일: docs/images/merge-modal.png, 권장 크기: 800px 너비 -->
 
-- **Resolved sections** (identical on both sides) are shown in gray, with long blocks collapsed
-- **Conflicting sections** are highlighted with local (red) and remote (green) options
-- Click a section to choose local, remote, or both
-- A status bar tracks unresolved sections
-- Click **Save** to write the merged result. Unresolved sections default to local.
-- **Keep all local** / **Keep all remote** buttons for quick resolution
+**For text files**, you see a side-by-side view:
 
-**Images** — a side-by-side visual comparison with file sizes displayed. Choose local or remote.
+- Sections that are the same on both devices are shown in gray
+- Sections that differ are highlighted — click one to choose **your version**, **the other version**, or **both**
+- A counter at the bottom shows how many sections still need your decision
+- When you're ready, click **Save**
 
-**Other binary files** — metadata (file sizes, remote modification time) is shown. Choose local or remote.
+You can also click **Keep all local** or **Keep all remote** to quickly resolve everything at once.
 
-**Skip (Later)** — defer this conflict. The file won't be synced this cycle. It will appear again on the next sync.
+<!-- TODO: 스크린샷 — 이미지 파일 비교 모달 (두 이미지 나란히) -->
+<!-- 파일: docs/images/image-compare.png -->
 
-## How conflicts are detected
+**For images**, you see both versions side by side with their file sizes, so you can pick the right one visually.
 
-The plugin tracks each file's `rev` (Dropbox revision ID). When uploading, it sends the last known rev. If Dropbox has a newer rev (someone else uploaded in between), the API returns a conflict error, and the chosen strategy kicks in.
+**For other files** (PDFs, etc.), you see file sizes and modification dates to help you decide.
 
-This is more reliable than timestamp comparison — it catches every concurrent edit, even if the clocks are in sync.
+**Not sure yet?** Click the clock icon to skip this conflict for now. It will come back on the next sync.
+
+## Tips
+
+- **Conflicts are rare** if you wait a few seconds for sync to complete before switching devices
+- If conflicts keep appearing for the same file, it usually means two devices are editing it at the same time — try editing on one device at a time
+- `.conflict` files are regular files — you can open, edit, and delete them normally

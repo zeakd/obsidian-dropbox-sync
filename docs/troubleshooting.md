@@ -2,62 +2,74 @@
 
 ## "Token expired. Please reconnect in settings."
 
-Your Dropbox access was revoked or the refresh token expired. Go to Settings > Dropbox Sync > Disconnect, then Connect again. Your files and sync state are preserved — only the authentication needs to be renewed.
+Your Dropbox connection expired. This happens occasionally and is easy to fix:
 
-## Sync seems stuck or nothing happens
+1. Go to **Settings > Dropbox Sync**
+2. Click **Disconnect**
+3. Click **Connect to Dropbox** again
 
-1. Click the ribbon icon (or status bar) to check the current status
-2. If it shows "error", click **View Logs** to see what went wrong
-3. Try **Sync Now** to trigger a manual sync
-4. Check that sync is enabled (toggle in Settings or status modal)
+Your files and settings are preserved — only the connection needs to be renewed.
 
-If the status bar shows "Dropbox: off", sync is disabled. Toggle it on in Settings.
+## Sync doesn't seem to be working
 
-## Files are syncing but some are missing
+A few things to check:
 
-Check your **Exclude patterns** in Settings. The settings panel shows how many files are currently excluded. Remove or adjust patterns if needed.
+1. Look at the **status bar** at the bottom of Obsidian — it shows the current sync state
+2. If it says "Dropbox: off", sync is disabled. Go to Settings and toggle it on.
+3. If it says "error", right-click the sync icon in the sidebar and choose a menu option, or check the logs (see below)
+4. Try clicking the **sync icon** in the left sidebar to trigger a manual sync
 
-Also check that the missing files aren't in a folder that was never synced. Changing the Vault ID starts syncing to a different Dropbox folder.
+<!-- TODO: 스크린샷 — 우클릭 메뉴 (Sync Now / Start Sync / Settings) -->
+<!-- 파일: docs/images/context-menu.png -->
+
+## Some files aren't syncing
+
+This usually means they match an **exclude pattern**. Check in **Settings > Exclude patterns** — the panel shows how many files are currently excluded.
+
+If you recently changed the **Vault ID**, the plugin is now syncing to a different Dropbox folder. Files from the old folder are still on Dropbox but won't sync to this vault anymore.
 
 ## "X deletions skipped by protection"
 
-The bulk delete guard prevented a large number of deletions. This is a safety feature. If the deletions are intentional:
+This is the safety guard doing its job. A sync tried to delete more files than the threshold allows.
 
-1. Sync again — the delete confirmation modal will appear
-2. Review the list and click **Delete** to proceed
+If the deletions are intentional:
+1. Sync again — the confirmation window will appear
+2. Review the file list
+3. Click **Delete** to proceed
 
-If you frequently need to delete many files at once, increase the **Delete threshold** in Settings.
+If this happens often, you can increase the threshold in **Settings > Delete threshold**.
 
-## Conflicts keep appearing
+## Conflicts keep coming back
 
-If a conflict modal appears for the same file repeatedly:
+Two common reasons:
 
-- Choosing **Later** (skip) defers the conflict to the next sync. Resolve it by choosing local, remote, or merging.
-- If two devices are both actively editing the same file, conflicts will recur. Consider editing on one device at a time, or switch to **Keep newest** strategy.
+- **You chose "Later"**: the conflict is deferred and will appear again on the next sync. To resolve it, choose your version, the remote version, or merge them.
+- **Two devices are editing the same file at the same time**: conflicts will recur until one device finishes editing. Try waiting for sync to complete before switching devices.
 
-## Mobile: "Connection failed"
+## Mobile: connection isn't working
 
-On iOS/Android, authentication uses a two-step code flow:
+On mobile, connecting to Dropbox takes two steps:
 
-1. Click **Open Dropbox** — this opens the Dropbox authorization page
-2. Copy the code shown after authorization
-3. Paste it back in the plugin settings and click **Connect**
+1. Tap **Open Dropbox** — this opens the authorization page
+2. After authorizing, you'll see a code — copy it
+3. Go back to Obsidian and paste the code, then tap **Connect**
 
-Make sure you complete both steps in the same session. The authorization code is single-use and expires quickly.
+The code can only be used once and expires quickly, so paste it promptly.
 
 ## Sync is slow
 
-- The first sync uploads/downloads your entire vault. Subsequent syncs are incremental (delta only).
-- Large vaults with many binary files (images, PDFs) take longer. Use **Exclude patterns** to skip files you don't need synced.
-- Dropbox API rate limits may slow things down during heavy usage. The plugin retries automatically with backoff.
+- **First sync** uploads or downloads your entire vault. This is normal and only happens once.
+- **Large files** (images, PDFs) take longer. You can exclude them with patterns like `*.pdf` or `attachments/`.
+- If Dropbox is rate-limiting your requests, the plugin waits and retries automatically.
 
-## Viewing logs
+## How to check the logs
 
-Two ways to access sync logs:
+Logs can help diagnose what's going wrong. Two ways to access them:
 
-1. Command palette > "Dropbox Sync: View sync logs"
-2. Settings > Dropbox Sync > Troubleshooting > View Logs
+1. Open the **command palette** (Ctrl/Cmd+P) and search for "View sync logs"
+2. Go to **Settings > Dropbox Sync > Troubleshooting > View Logs**
 
-Logs show timestamps, sync actions, and errors. Use **Copy to clipboard** to share when reporting issues.
+<!-- TODO: 스크린샷 — 로그 뷰어 모달 -->
+<!-- 파일: docs/images/log-viewer.png -->
 
-Each device writes to its own log file (`sync-debug-{deviceId}.log`) to avoid conflicts between devices.
+You can copy the logs to your clipboard to share when reporting issues.
