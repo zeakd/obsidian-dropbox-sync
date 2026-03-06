@@ -178,7 +178,7 @@ export function dispatchConflict(
 
 /**
  * 충돌 파일 경로 생성 (timestamp 포함으로 반복 충돌 시 덮어쓰기 방지).
- * test.md → test.conflict-20260305T103500.md
+ * test.md → test.conflict-2026-03-05T1035.md
  */
 export function makeConflictPath(path: string): string {
   const ts = new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);

@@ -7,9 +7,9 @@ import { checkDeleteGuard } from "./guards";
 import { DropboxCursorResetError } from "../adapters/dropbox-adapter";
 import { isExcluded } from "../exclude";
 
-/** conflict 파일 판별 (.conflict-YYYYMMDDTHHMMSS 패턴) */
+/** conflict 파일 판별 (.conflict-YYYY-MM-DDTHHMM 패턴) */
 export function isConflictFile(path: string): boolean {
-  return /\.conflict-\d{8}T\d{6}/i.test(path);
+  return /\.conflict-\d{4}-\d{2}-\d{2}t\d{4}/i.test(path);
 }
 
 export interface SyncEngineDeps {

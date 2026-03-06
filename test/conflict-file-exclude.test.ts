@@ -4,10 +4,10 @@ import { SyncSimulator } from "./support/sync-simulator";
 
 describe("isConflictFile", () => {
   test("conflict 패턴 매치", () => {
-    expect(isConflictFile("note.conflict-20260306T143200.md")).toBe(true);
-    expect(isConflictFile("folder/deep/note.conflict-20260101T000000.md")).toBe(true);
-    expect(isConflictFile("test.conflict-20260305T103500.txt")).toBe(true);
-    expect(isConflictFile("no-ext.conflict-20260306T143200")).toBe(true);
+    expect(isConflictFile("note.conflict-2026-03-06T1432.md")).toBe(true);
+    expect(isConflictFile("folder/deep/note.conflict-2026-01-01T0000.md")).toBe(true);
+    expect(isConflictFile("test.conflict-2026-03-05T1035.txt")).toBe(true);
+    expect(isConflictFile("no-ext.conflict-2026-03-06T1432")).toBe(true);
   });
 
   test("일반 파일은 매치 안 됨", () => {
@@ -25,12 +25,12 @@ describe("conflict 파일 싱크 제외", () => {
 
     // 일반 파일 + conflict 파일 생성
     await a.editFile("note.md", "content");
-    await a.editFile("note.conflict-20260306T143200.md", "remote version");
+    await a.editFile("note.conflict-2026-03-06T1432.md", "remote version");
     await a.sync();
 
     // 일반 파일만 원격에 존재
     expect(sim.remote.has("note.md")).toBe(true);
-    expect(sim.remote.has("note.conflict-20260306T143200.md")).toBe(false);
+    expect(sim.remote.has("note.conflict-2026-03-06T1432.md")).toBe(false);
   });
 
   test("Dropbox에 있는 conflict 파일은 다운로드되지 않음", async () => {
@@ -44,14 +44,14 @@ describe("conflict 파일 싱크 제외", () => {
 
     // 원격에 직접 conflict 파일 업로드 (레거시 데이터 시뮬레이션)
     await sim.remote.upload(
-      "note.conflict-20260306T143200.md",
+      "note.conflict-2026-03-06T1432.md",
       new TextEncoder().encode("old conflict"),
     );
 
     // B sync: conflict 파일은 다운로드 안 됨
     await b.sync();
     expect(b.hasFile("note.md")).toBe(true);
-    expect(b.hasFile("note.conflict-20260306T143200.md")).toBe(false);
+    expect(b.hasFile("note.conflict-2026-03-06T1432.md")).toBe(false);
   });
 
   test("conflict 파일 삭제 시 deleteRemote가 생성되지 않음", async () => {
@@ -63,8 +63,8 @@ describe("conflict 파일 싱크 제외", () => {
     await a.sync();
 
     // conflict 파일 생성 후 삭제 (trackDelete 호출)
-    await a.editFile("note.conflict-20260306T143200.md", "conflict data");
-    await a.deleteFile("note.conflict-20260306T143200.md");
+    await a.editFile("note.conflict-2026-03-06T1432.md", "conflict data");
+    await a.deleteFile("note.conflict-2026-03-06T1432.md");
 
     // sync: conflict 파일은 plan에 포함되지 않으므로 에러 없이 완료
     const { plan } = await a.sync();

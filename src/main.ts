@@ -180,7 +180,7 @@ export default class DropboxSyncPlugin extends Plugin {
     this.abortController = new AbortController();
     this.longpoll?.stop();
     this.statusBar?.update("syncing");
-    await this.log("sync started");
+    await this.log(`sync started (v${this.manifest.version})`);
 
     let cursorUpdated = false;
 
