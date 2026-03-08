@@ -2,7 +2,7 @@ import type { FileSystem, RemoteStorage, SyncStateStore } from "../adapters/inte
 import type { RemoteEntry, SyncPlan, SyncResult } from "../types";
 import { createPlan } from "./planner";
 import type { ConflictStrategy, ConflictResolver, DeleteGuardResult } from "../types";
-import { executePlan, type ExecutorConfig } from "./executor";
+import { executePlan } from "./executor";
 import { checkDeleteGuard } from "./guards";
 import { DropboxCursorResetError } from "../adapters/dropbox-adapter";
 import { isExcluded } from "../exclude";
@@ -91,13 +91,66 @@ export class SyncEngine {
 
   async runCycle(signal?: AbortSignal): Promise<CycleResult> {
     const { fs, remote, store } = this.deps;
-    const sig = signal;
 
-    // 1. 로컬 파일 수집 (conflict 파일 제외 — 로컬 전용 산물)
-    sig?.throwIfAborted();
-    const localFiles = (await fs.list()).filter((f) => !isConflictFile(f.path));
+    // 1. 로컬 파일 수집
+    signal?.throwIfAborted();
+    const localFiles = this.collectLocalFiles(await fs.list());
 
-    // 2. 원격 변경 수집 (delta, cursor 만료 시 전체 재스캔)
+    // 2. 원격 변경 수집 (delta)
+    const { deltaEntries, latestCursor } = await this.fetchRemoteDeltas(store, remote, signal);
+
+    // 3. 이전 상태 로드
+    signal?.throwIfAborted();
+    const baseEntries = await store.getAllEntries();
+
+    // 4. base + delta 병합 → 전체 원격 상태
+    const fullRemoteMap = this.buildFullRemoteState(baseEntries, deltaEntries);
+
+    // 5. catch-up: vault 이벤트 누락 보완
+    this.inferMissingDeletes(localFiles, fullRemoteMap, baseEntries);
+
+    // 6. 동기화 계획 생성
+    signal?.throwIfAborted();
+    const fullRemoteEntries = Array.from(fullRemoteMap.values());
+    const plan = createPlan(localFiles, fullRemoteEntries, baseEntries, {
+      localDeletedPaths: this.deletedPaths,
+    });
+
+    // 7. 삭제 가드 적용
+    const { planToExecute, deletesSkipped } = await this.applyDeleteGuard(plan);
+
+    // 8. 계획 실행
+    signal?.throwIfAborted();
+    const result = await executePlan(planToExecute, { fs, remote, store }, {
+      conflictStrategy: this.options.conflictStrategy,
+      conflictResolver: this.options.conflictResolver,
+      isFileActive: this.options.isFileActive,
+      signal,
+      concurrency: this.options.concurrency,
+      onProgress: this.options.onProgress,
+      onConflictCount: this.options.onConflictCount,
+    });
+
+    // 9. 상태 갱신
+    await this.finalizeState(store, result, latestCursor, deletesSkipped);
+
+    const deferredCount = result.deferred.length > 0 ? result.deferred.length : undefined;
+    return { plan, result, deletesSkipped, deferredCount };
+  }
+
+  // ── private helpers ──
+
+  /** conflict 파일을 제외한 로컬 파일 목록 */
+  private collectLocalFiles(files: import("../types").FileInfo[]): import("../types").FileInfo[] {
+    return files.filter((f) => !isConflictFile(f.path));
+  }
+
+  /** cursor 기반 원격 delta 수집 (cursor 만료 시 전체 재스캔) */
+  private async fetchRemoteDeltas(
+    store: import("../adapters/interfaces").SyncStateStore,
+    remote: import("../adapters/interfaces").RemoteStorage,
+    signal?: AbortSignal,
+  ): Promise<{ deltaEntries: RemoteEntry[]; latestCursor: string }> {
     let cursor = await store.getMeta("cursor");
     let changes;
     try {
@@ -117,18 +170,21 @@ export class SyncEngine {
     let hasMore = changes.hasMore;
 
     while (hasMore) {
-      sig?.throwIfAborted();
+      signal?.throwIfAborted();
       const more = await remote.listChanges(latestCursor);
       deltaEntries = deltaEntries.concat(more.entries);
       latestCursor = more.cursor;
       hasMore = more.hasMore;
     }
 
-    // 3. 이전 상태 로드
-    sig?.throwIfAborted();
-    const baseEntries = await store.getAllEntries();
+    return { deltaEntries, latestCursor };
+  }
 
-    // 4. base + delta 병합 → 전체 원격 상태 구성
+  /** base + delta 병합 → 전체 원격 상태 맵 (제외 패턴 적용 포함) */
+  private buildFullRemoteState(
+    baseEntries: import("../types").SyncEntry[],
+    deltaEntries: RemoteEntry[],
+  ): Map<string, RemoteEntry> {
     const fullRemoteMap = new Map<string, RemoteEntry>();
 
     for (const base of baseEntries) {
@@ -161,10 +217,15 @@ export class SyncEngine {
       }
     }
 
-    const fullRemoteEntries = Array.from(fullRemoteMap.values());
+    return fullRemoteMap;
+  }
 
-    // 5. catch-up: base에 있지만 로컬에 없는 파일 → 삭제 의도 보완
-    //    vault 이벤트가 누락된 경우(모바일 등) 안전망 역할
+  /** base에 있지만 로컬에 없는 파일 → 삭제 의도 보완 (vault 이벤트 누락 안전망) */
+  private inferMissingDeletes(
+    localFiles: import("../types").FileInfo[],
+    fullRemoteMap: Map<string, RemoteEntry>,
+    baseEntries: import("../types").SyncEntry[],
+  ): void {
     const localPathSet = new Set(localFiles.map((f) => f.pathLower));
     for (const base of baseEntries) {
       if (
@@ -175,52 +236,40 @@ export class SyncEngine {
         this.deletedPaths.add(base.pathLower);
       }
     }
+  }
 
-    // 6. 동기화 계획 생성 (삭제 의도 전달)
-    sig?.throwIfAborted();
-    const plan = createPlan(localFiles, fullRemoteEntries, baseEntries, {
-      localDeletedPaths: this.deletedPaths,
-    });
-
-    // 7. 삭제 가드 적용
+  /** 삭제 가드 적용 → 실행할 plan과 스킵 수 반환 */
+  private async applyDeleteGuard(
+    plan: SyncPlan,
+  ): Promise<{ planToExecute: SyncPlan; deletesSkipped: number }> {
     const guard = checkDeleteGuard(
       plan,
       this.options.deleteThreshold ?? 5,
       this.options.deleteProtection ?? false,
     );
 
-    let planToExecute = plan;
-    let deletesSkipped = 0;
+    if (guard.passed) {
+      return { planToExecute: plan, deletesSkipped: 0 };
+    }
 
-    if (!guard.passed) {
-      if (this.options.onDeleteGuardTriggered) {
-        const approved = await this.options.onDeleteGuardTriggered(guard);
-        if (!approved) {
-          planToExecute = guard.filteredPlan;
-          deletesSkipped = guard.deleteItems.length;
-        }
-        // approved → 원본 plan 그대로 실행
-      } else {
-        // 콜백 없음 → 삭제 스킵 (안전)
-        planToExecute = guard.filteredPlan;
-        deletesSkipped = guard.deleteItems.length;
+    if (this.options.onDeleteGuardTriggered) {
+      const approved = await this.options.onDeleteGuardTriggered(guard);
+      if (approved) {
+        return { planToExecute: plan, deletesSkipped: 0 };
       }
     }
 
-    // 8. 계획 실행
-    sig?.throwIfAborted();
-    const executorConfig: ExecutorConfig = {
-      conflictStrategy: this.options.conflictStrategy,
-      conflictResolver: this.options.conflictResolver,
-      isFileActive: this.options.isFileActive,
-      signal: sig,
-      concurrency: this.options.concurrency,
-      onProgress: this.options.onProgress,
-      onConflictCount: this.options.onConflictCount,
-    };
-    const result = await executePlan(planToExecute, { fs, remote, store }, executorConfig);
+    return { planToExecute: guard.filteredPlan, deletesSkipped: guard.deleteItems.length };
+  }
 
-    // 9. 모두 성공 시에만 cursor 갱신 (deferred도 미완료 취급)
+  /** cursor 갱신 + 성공한 삭제 항목 정리 */
+  private async finalizeState(
+    store: import("../adapters/interfaces").SyncStateStore,
+    result: SyncResult,
+    latestCursor: string,
+    deletesSkipped: number,
+  ): Promise<void> {
+    // 모두 성공 시에만 cursor 갱신 (deferred도 미완료 취급)
     if (result.failed.length === 0 && deletesSkipped === 0 && result.deferred.length === 0) {
       await store.setMeta("cursor", latestCursor);
     }
@@ -231,8 +280,5 @@ export class SyncEngine {
         this.deletedPaths.delete(item.pathLower);
       }
     }
-
-    const deferredCount = result.deferred.length > 0 ? result.deferred.length : undefined;
-    return { plan, result, deletesSkipped, deferredCount };
   }
 }

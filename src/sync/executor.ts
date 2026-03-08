@@ -145,7 +145,13 @@ async function executeItem(
         entry = await remote.upload(localPath, data, rev);
       } catch (err) {
         if (err instanceof RevConflictError) {
-          await dispatchConflict(item, conflictCtx);
+          try {
+            await dispatchConflict(item, conflictCtx);
+          } catch (conflictErr) {
+            throw new Error(
+              `Rev conflict for "${localPath}" and conflict resolution also failed: ${conflictErr}`,
+            );
+          }
           return;
         }
         throw err;

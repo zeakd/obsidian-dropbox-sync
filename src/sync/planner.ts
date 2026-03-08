@@ -42,70 +42,78 @@ export function classifyChange(
 ): SyncAction {
   const localExists = local !== null;
   const remoteExists = remote !== null && !remote.deleted;
-  const baseExists = base !== null;
 
-  // Case 1: 양쪽 모두 존재
-  if (localExists && remoteExists) {
-    // hash 동일 → 내용 같음
-    if (local.hash === remote.hash) {
-      return { type: "noop", reason: "same_content" };
-    }
+  if (localExists && remoteExists) return classifyBothExist(local, remote, base);
+  if (localExists && !remoteExists) return classifyLocalOnly(local, base);
+  if (!localExists && remoteExists) return classifyRemoteOnly(remote, base, options);
+  return { type: "noop", reason: "both_absent" };
+}
 
-    if (!baseExists) {
-      // base 없음 + 양쪽 존재 + hash 다름 → conflict
-      return { type: "conflict", localHash: local.hash, remoteHash: remote.hash };
-    }
+/** 양쪽 모두 존재: hash 비교 → base 기반 변경 감지 */
+function classifyBothExist(
+  local: LocalState,
+  remote: RemoteState,
+  base: SyncEntry | null,
+): SyncAction {
+  if (local.hash === remote.hash) {
+    return { type: "noop", reason: "same_content" };
+  }
 
-    const localChanged = local.hash !== base.baseLocalHash;
-    const remoteChanged = remote.hash !== base.baseRemoteHash;
-
-    if (localChanged && remoteChanged) {
-      return { type: "conflict", localHash: local.hash, remoteHash: remote.hash };
-    }
-    if (localChanged) {
-      return { type: "upload", reason: "local_modified" };
-    }
-    if (remoteChanged) {
-      return { type: "download", reason: "remote_modified" };
-    }
-    // 양쪽 base 대비 미변경이지만 hash가 다름 (base hash 불일치 — 복구 상황)
+  if (!base) {
     return { type: "conflict", localHash: local.hash, remoteHash: remote.hash };
   }
 
-  // Case 2: 로컬만 존재
-  if (localExists && !remoteExists) {
-    if (baseExists) {
-      // base에 있었고 local이 base 대비 변경됨 → 삭제+수정 교차 → upload (변경 우선)
-      if (local.hash !== base.baseLocalHash) {
-        return { type: "upload", reason: "local_modified_remote_deleted" };
-      }
-      // base에 있었고 local 미변경 → 원격에서 삭제됨
-      return { type: "deleteLocal", reason: "deleted_on_remote" };
-    }
-    // base 없음 → 새 로컬 파일
-    return { type: "upload", reason: "new_local" };
-  }
+  const localChanged = local.hash !== base.baseLocalHash;
+  const remoteChanged = remote.hash !== base.baseRemoteHash;
 
-  // Case 3: 원격만 존재
-  if (!localExists && remoteExists) {
-    if (baseExists) {
-      // base에 있었고 remote가 base 대비 변경됨 → 삭제+수정 교차 → download (변경 우선)
-      if (remote.hash !== base.baseRemoteHash) {
-        return { type: "download", reason: "remote_modified_local_deleted" };
-      }
-      // base에 있었고 remote 미변경 → 삭제 의도 확인
-      if (options?.localDeleteIntended) {
-        return { type: "deleteRemote", reason: "deleted_on_local" };
-      }
-      // 삭제 의도 없음 → 로컬에서 빠진 파일 복구
-      return { type: "download", reason: "missing_local_restored" };
-    }
-    // base 없음 → 새 원격 파일
-    return { type: "download", reason: "new_remote" };
+  if (localChanged && remoteChanged) {
+    return { type: "conflict", localHash: local.hash, remoteHash: remote.hash };
   }
+  if (localChanged) {
+    return { type: "upload", reason: "local_modified" };
+  }
+  if (remoteChanged) {
+    return { type: "download", reason: "remote_modified" };
+  }
+  // 양쪽 base 대비 미변경이지만 hash가 다름 (base hash 불일치 — 복구 상황)
+  return { type: "conflict", localHash: local.hash, remoteHash: remote.hash };
+}
 
-  // Case 4: 양쪽 모두 없음
-  return { type: "noop", reason: "both_absent" };
+/** 로컬만 존재: base 유무로 새 파일 vs 원격 삭제 판단 */
+function classifyLocalOnly(
+  local: LocalState,
+  base: SyncEntry | null,
+): SyncAction {
+  if (base) {
+    // base 대비 변경됨 → 삭제+수정 교차 → upload (변경 우선)
+    if (local.hash !== base.baseLocalHash) {
+      return { type: "upload", reason: "local_modified_remote_deleted" };
+    }
+    // base 대비 미변경 → 원격에서 삭제됨
+    return { type: "deleteLocal", reason: "deleted_on_remote" };
+  }
+  return { type: "upload", reason: "new_local" };
+}
+
+/** 원격만 존재: base 유무 + 삭제 의도로 다운로드 vs 삭제 판단 */
+function classifyRemoteOnly(
+  remote: RemoteState,
+  base: SyncEntry | null,
+  options?: ClassifyOptions,
+): SyncAction {
+  if (base) {
+    // base 대비 변경됨 → 삭제+수정 교차 → download (변경 우선)
+    if (remote.hash !== base.baseRemoteHash) {
+      return { type: "download", reason: "remote_modified_local_deleted" };
+    }
+    // base 대비 미변경 → 삭제 의도 확인
+    if (options?.localDeleteIntended) {
+      return { type: "deleteRemote", reason: "deleted_on_local" };
+    }
+    // 삭제 의도 없음 → 로컬에서 빠진 파일 복구
+    return { type: "download", reason: "missing_local_restored" };
+  }
+  return { type: "download", reason: "new_remote" };
 }
 
 export interface PlanOptions {

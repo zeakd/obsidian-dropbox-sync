@@ -58,7 +58,9 @@ export class EngineManager {
   persistDeleteLog(): void {
     if (!this.engine || !this.deps?.store) return;
     const log = this.engine.getDeleteLog();
-    this.deps.store.setMeta("deleteLog", JSON.stringify(log)).catch(() => {});
+    this.deps.store.setMeta("deleteLog", JSON.stringify(log)).catch((e) => {
+      console.error("Failed to persist delete log:", e);
+    });
   }
 
   async restoreDeleteLog(): Promise<void> {
@@ -68,7 +70,9 @@ export class EngineManager {
     if (saved) {
       try {
         this.engine.restoreDeleteLog(JSON.parse(saved) as string[]);
-      } catch { /* ignore */ }
+      } catch (e) {
+        console.error("Failed to restore delete log:", e);
+      }
     }
   }
 }

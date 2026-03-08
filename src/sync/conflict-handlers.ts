@@ -53,6 +53,16 @@ export async function updateSyncState(
   });
 }
 
+/** 로컬 파일 읽기 + content hash 계산 */
+async function readLocalWithHash(
+  fs: FileSystem,
+  path: string,
+): Promise<{ data: Uint8Array; hash: string }> {
+  const data = await fs.read(path);
+  const hash = await dropboxContentHashBrowser(data);
+  return { data, hash };
+}
+
 // ── Conflict Handlers ──
 
 /** keep_both: 원격을 .conflict 파일로 보존, 로컬을 원격에 업로드 */
@@ -67,8 +77,7 @@ export async function handleConflictKeepBoth(
   const conflictPath = makeConflictPath(localPath);
   await fs.write(conflictPath, result.data, result.metadata.serverModified);
 
-  const localData = await fs.read(localPath);
-  const localHash = await dropboxContentHashBrowser(localData);
+  const { data: localData, hash: localHash } = await readLocalWithHash(fs, localPath);
   const entry = await remote.upload(localPath, localData);
 
   await updateSyncState(store, pathLower, localPath, localHash, entry.hash ?? localHash, entry.rev);
@@ -94,8 +103,7 @@ export async function handleConflictNewest(
   }
 
   if (localMtime > remoteMtime) {
-    const localData = await fs.read(localPath);
-    const localHash = await dropboxContentHashBrowser(localData);
+    const { data: localData, hash: localHash } = await readLocalWithHash(fs, localPath);
     const entry = await remote.upload(localPath, localData);
     await updateSyncState(store, pathLower, localPath, localHash, entry.hash ?? localHash, entry.rev);
   } else {
@@ -117,7 +125,7 @@ export async function handleConflictManual(
     return;
   }
 
-  const localData = await fs.read(localPath);
+  const { data: localData, hash: localHash } = await readLocalWithHash(fs, localPath);
   const result = await downloadAndVerify(remote, localPath);
 
   const context: ConflictContext = {
@@ -143,7 +151,6 @@ export async function handleConflictManual(
   }
 
   if (choice === "local") {
-    const localHash = await dropboxContentHashBrowser(localData);
     const entry = await remote.upload(localPath, localData);
     await updateSyncState(store, pathLower, localPath, localHash, entry.hash ?? localHash, entry.rev);
   } else if (choice === "remote") {
