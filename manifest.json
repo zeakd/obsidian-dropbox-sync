@@ -3,7 +3,7 @@
   "name": "Dropbox Sync",
   "version": "1.0.0",
   "minAppVersion": "1.5.0",
-  "description": "Sync your vault with Dropbox — a seamless experience, on every device.",
+  "description": "Sync your vault with Dropbox. A seamless experience, on every device.",
   "author": "zeakd",
   "authorUrl": "https://github.com/zeakd",
   "isDesktopOnly": false
