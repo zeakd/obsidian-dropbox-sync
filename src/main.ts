@@ -515,7 +515,9 @@ export default class DropboxSyncPlugin extends Plugin {
   private reportSyncResult(result: SyncResult, deletesSkipped?: number): void {
     if (result.failed.length > 0) {
       for (const f of result.failed) {
-        this.log(`FAIL ${f.item.action.type} ${f.item.localPath}`, f.error);
+        const err = f.error;
+        const detail = err ? { message: err.message, name: err.name, stack: err.stack?.split("\n").slice(0, 3).join(" | ") } : err;
+        this.log(`FAIL ${f.item.action.type} ${f.item.localPath}`, detail);
       }
       this.lastSyncSummary = `${result.failed.length} failed, ${result.succeeded.length} ok`;
       this.statusBar?.update("error", `${result.failed.length} failed`);
