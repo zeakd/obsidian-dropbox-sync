@@ -181,7 +181,7 @@ export class DropboxAdapter implements RemoteStorage {
     on409?: (errBody: DropboxErrorResponse) => void;
     on429Final?: (errBody: DropboxErrorResponse) => void;
   }): Promise<{ status: number; json: unknown; text: string; headers: Record<string, string>; arrayBuffer: ArrayBuffer }> {
-    const maxRetries = 3;
+    const maxRetries = 4;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       let resp;
       try {
@@ -198,10 +198,9 @@ export class DropboxAdapter implements RemoteStorage {
           throw: false,
         });
       } catch (e) {
-        // 네트워크 연결 실패 (모바일에서 빈번) — 재시도
+        // 네트워크 연결 실패 (iOS -1005 등) — 긴 딜레이로 연결 풀 리셋 유도
         if (attempt < maxRetries) {
-          const delay = 1000 * Math.pow(2, attempt);
-          console.log(`[Dropbox] network error, retry ${attempt + 1}/${maxRetries} in ${delay}ms`, opts.url.split("/").pop(), (e as Error).message);
+          const delay = 2000 * Math.pow(2, attempt); // 2s, 4s, 8s, 16s
           await this.sleep(delay);
           continue;
         }

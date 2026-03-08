@@ -54,11 +54,11 @@ describe("DropboxAdapter retry on 429", () => {
     expect(requestUrlMock).toHaveBeenCalledTimes(2);
   });
 
-  test("rpcCall: 429 연속 4번 (max 3 retry 초과) → DropboxRateLimitError", async () => {
+  test("rpcCall: 429 연속 5번 (max 4 retry 초과) → DropboxRateLimitError", async () => {
     const adapter = createAdapter();
 
-    // 4번 연속 429
-    for (let i = 0; i < 4; i++) {
+    // 5번 연속 429
+    for (let i = 0; i < 5; i++) {
       requestUrlMock.mockResolvedValueOnce({
         status: 429,
         json: { error: { retry_after: 0 } },
@@ -67,7 +67,7 @@ describe("DropboxAdapter retry on 429", () => {
     }
 
     await expect(adapter.listChanges()).rejects.toThrow(DropboxRateLimitError);
-    expect(requestUrlMock).toHaveBeenCalledTimes(4);
+    expect(requestUrlMock).toHaveBeenCalledTimes(5);
   });
 
   test("download: 429 → retry 후 성공", async () => {
@@ -212,11 +212,11 @@ describe("DropboxAdapter retry on 429", () => {
     expect(requestUrlMock).toHaveBeenCalledTimes(2);
   });
 
-  test("upload: 503 연속 4번 → 에러 throw", async () => {
+  test("upload: 503 연속 5번 → 에러 throw", async () => {
     const adapter = createAdapter();
     const data = new Uint8Array([1]);
 
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       requestUrlMock.mockResolvedValueOnce({
         status: 503,
         json: {},
@@ -225,7 +225,7 @@ describe("DropboxAdapter retry on 429", () => {
     }
 
     await expect(adapter.upload("test.md", data)).rejects.toThrow("Dropbox API error 503");
-    expect(requestUrlMock).toHaveBeenCalledTimes(4);
+    expect(requestUrlMock).toHaveBeenCalledTimes(5);
   });
 
   test("rpcCall: 409 reset → DropboxCursorResetError (retry 안 함)", async () => {
@@ -260,16 +260,16 @@ describe("DropboxAdapter retry on 429", () => {
     expect(requestUrlMock).toHaveBeenCalledTimes(2);
   });
 
-  test("upload: 네트워크 에러 연속 4번 → throw", async () => {
+  test("upload: 네트워크 에러 연속 5번 → throw", async () => {
     const adapter = createAdapter();
     const data = new Uint8Array([1]);
 
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       requestUrlMock.mockRejectedValueOnce(new Error("The network connection was lost."));
     }
 
     await expect(adapter.upload("test.md", data)).rejects.toThrow("network connection was lost");
-    expect(requestUrlMock).toHaveBeenCalledTimes(4);
+    expect(requestUrlMock).toHaveBeenCalledTimes(5);
   });
 
   test("download: 네트워크 에러 → 5xx → 성공", async () => {
