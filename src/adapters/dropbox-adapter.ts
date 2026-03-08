@@ -183,19 +183,28 @@ export class DropboxAdapter implements RemoteStorage {
   }): Promise<{ status: number; json: unknown; text: string; headers: Record<string, string>; arrayBuffer: ArrayBuffer }> {
     const maxRetries = 3;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      await this.ensureValidToken();
-
-      const resp = await requestUrl({
-        url: opts.url,
-        method: opts.method,
-        contentType: opts.contentType,
-        headers: {
-          Authorization: `Bearer ${this.config.getAccessToken()}`,
-          ...opts.headers,
-        },
-        body: opts.body,
-        throw: false,
-      });
+      let resp;
+      try {
+        await this.ensureValidToken();
+        resp = await requestUrl({
+          url: opts.url,
+          method: opts.method,
+          contentType: opts.contentType,
+          headers: {
+            Authorization: `Bearer ${this.config.getAccessToken()}`,
+            ...opts.headers,
+          },
+          body: opts.body,
+          throw: false,
+        });
+      } catch (e) {
+        // 네트워크 연결 실패 (모바일에서 빈번) — 재시도
+        if (attempt < maxRetries) {
+          await this.sleep(1000 * Math.pow(2, attempt));
+          continue;
+        }
+        throw e;
+      }
 
       // retry 판정 (429 / 5xx)
       if (resp.status === 429 || (resp.status >= 500 && resp.status < 600)) {

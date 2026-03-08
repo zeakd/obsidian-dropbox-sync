@@ -241,4 +241,59 @@ describe("DropboxAdapter retry on 429", () => {
     await expect(adapter.listChanges("old_cursor")).rejects.toThrow(DropboxCursorResetError);
     expect(requestUrlMock).toHaveBeenCalledTimes(1);
   });
+
+  // ── 네트워크 에러 retry ──
+
+  test("rpcCall: 네트워크 에러 1회 → retry 후 성공", async () => {
+    const adapter = createAdapter();
+
+    requestUrlMock.mockRejectedValueOnce(new Error("The network connection was lost."));
+
+    requestUrlMock.mockResolvedValueOnce({
+      status: 200,
+      json: { entries: [], cursor: "cursor_net", has_more: false },
+      text: "{}",
+    });
+
+    const result = await adapter.listChanges();
+    expect(result.cursor).toBe("cursor_net");
+    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("upload: 네트워크 에러 연속 4번 → throw", async () => {
+    const adapter = createAdapter();
+    const data = new Uint8Array([1]);
+
+    for (let i = 0; i < 4; i++) {
+      requestUrlMock.mockRejectedValueOnce(new Error("The network connection was lost."));
+    }
+
+    await expect(adapter.upload("test.md", data)).rejects.toThrow("network connection was lost");
+    expect(requestUrlMock).toHaveBeenCalledTimes(4);
+  });
+
+  test("download: 네트워크 에러 → 5xx → 성공", async () => {
+    const adapter = createAdapter();
+
+    requestUrlMock.mockRejectedValueOnce(new Error("Request failed"));
+    requestUrlMock.mockResolvedValueOnce({ status: 503, json: {}, text: "unavailable" });
+    requestUrlMock.mockResolvedValueOnce({
+      status: 200,
+      arrayBuffer: new ArrayBuffer(3),
+      headers: {
+        "dropbox-api-result": JSON.stringify({
+          path_display: "/test.md",
+          content_hash: "abc",
+          server_modified: "2024-01-01T00:00:00Z",
+          rev: "rev_net",
+          size: 3,
+        }),
+      },
+      text: "",
+    });
+
+    const result = await adapter.download("test.md");
+    expect(result.metadata.rev).toBe("rev_net");
+    expect(requestUrlMock).toHaveBeenCalledTimes(3);
+  });
 });
