@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await -- test adapters: async wraps sync throws into Promise rejections */
 import { dropboxContentHash } from "../hash";
 import {
   RevConflictError,
@@ -43,7 +44,7 @@ export class MemoryFileSystem implements FileSystem {
       result.push({
         path,
         pathLower: path.toLowerCase(),
-        hash: dropboxContentHash(file.data),
+        hash: await dropboxContentHash(file.data),
         mtime: file.mtime,
         size: file.data.length,
       });
@@ -51,10 +52,10 @@ export class MemoryFileSystem implements FileSystem {
     return result;
   }
 
-  async stat(path: string): Promise<{ mtime: number; size: number }> {
+  stat(path: string): Promise<{ mtime: number; size: number }> {
     const file = this.files.get(path);
     if (!file) throw new Error(`File not found: ${path}`);
-    return { mtime: file.mtime, size: file.data.length };
+    return Promise.resolve({ mtime: file.mtime, size: file.data.length });
   }
 
   async computeHash(path: string): Promise<string> {
@@ -151,7 +152,7 @@ export class MemoryRemoteStorage implements RemoteStorage {
     }
 
     const newRev = this.nextRev();
-    const hash = dropboxContentHash(data);
+    const hash = await dropboxContentHash(data);
     const now = Date.now();
 
     const file: RemoteFile = {
@@ -228,33 +229,37 @@ export class MemoryStateStore implements SyncStateStore {
   private entries = new Map<string, SyncEntry>();
   private meta = new Map<string, string>();
 
-  async getEntry(pathLower: string): Promise<SyncEntry | null> {
-    return this.entries.get(pathLower) ?? null;
+  getEntry(pathLower: string): Promise<SyncEntry | null> {
+    return Promise.resolve(this.entries.get(pathLower) ?? null);
   }
 
-  async setEntry(entry: SyncEntry): Promise<void> {
+  setEntry(entry: SyncEntry): Promise<void> {
     this.entries.set(entry.pathLower, { ...entry });
+    return Promise.resolve();
   }
 
-  async deleteEntry(pathLower: string): Promise<void> {
+  deleteEntry(pathLower: string): Promise<void> {
     this.entries.delete(pathLower);
+    return Promise.resolve();
   }
 
-  async getAllEntries(): Promise<SyncEntry[]> {
-    return [...this.entries.values()];
+  getAllEntries(): Promise<SyncEntry[]> {
+    return Promise.resolve([...this.entries.values()]);
   }
 
-  async clear(): Promise<void> {
+  clear(): Promise<void> {
     this.entries.clear();
     this.meta.clear();
+    return Promise.resolve();
   }
 
-  async getMeta(key: string): Promise<string | null> {
-    return this.meta.get(key) ?? null;
+  getMeta(key: string): Promise<string | null> {
+    return Promise.resolve(this.meta.get(key) ?? null);
   }
 
-  async setMeta(key: string, value: string): Promise<void> {
+  setMeta(key: string, value: string): Promise<void> {
     this.meta.set(key, value);
+    return Promise.resolve();
   }
 
   // 테스트 헬퍼

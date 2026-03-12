@@ -14,3 +14,224 @@
   border-radius: 2px;
   transition: width 0.2s ease;
 }
+
+/* ── Conflict Modal ── */
+
+.dbx-sync-conflict-modal-wide {
+  max-width: 90vw;
+  width: 90vw;
+}
+
+.dbx-sync-conflict-modal-wide-mobile {
+  max-width: 95vw;
+  width: 95vw;
+}
+
+.dbx-sync-conflict-scroll {
+  max-height: 60vh;
+  overflow: auto;
+  margin-bottom: 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 12px;
+  background: var(--background-secondary);
+}
+
+.dbx-sync-conflict-scroll-mobile {
+  max-height: 50vh;
+  overflow: auto;
+  margin-bottom: 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 12px;
+  background: var(--background-secondary);
+}
+
+.dbx-sync-conflict-status-unresolved {
+  color: var(--text-error);
+}
+
+.dbx-sync-conflict-status-resolved {
+  color: var(--text-success, var(--text-normal));
+}
+
+.dbx-sync-conflict-resolved-block {
+  font-family: monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-muted);
+  padding: 2px 0;
+}
+
+.dbx-sync-conflict-collapsed-hint {
+  color: var(--text-faint);
+  font-style: italic;
+  cursor: pointer;
+}
+
+.dbx-sync-conflict-card {
+  border: 1px solid var(--text-error);
+  border-radius: 6px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.dbx-sync-conflict-card-resolved {
+  border-color: var(--text-success, var(--interactive-accent));
+}
+
+.dbx-sync-conflict-header {
+  background: rgba(255, 80, 80, 0.1);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dbx-sync-conflict-header-resolved {
+  background: rgba(80, 200, 80, 0.1);
+}
+
+.dbx-sync-conflict-body {
+  padding: 8px;
+}
+
+.dbx-sync-conflict-code {
+  font-family: monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  margin-bottom: 4px;
+  transition: border-color 0.15s;
+}
+
+.dbx-sync-conflict-code-local {
+  background: rgba(255, 80, 80, 0.08);
+}
+
+.dbx-sync-conflict-code-remote {
+  background: rgba(80, 200, 80, 0.08);
+}
+
+.dbx-sync-conflict-code-both {
+  background: rgba(100, 150, 255, 0.08);
+}
+
+.dbx-sync-conflict-code-empty {
+  font-style: italic;
+}
+
+.dbx-sync-conflict-code-selected-local {
+  border-color: var(--text-error);
+}
+
+.dbx-sync-conflict-code-selected-remote {
+  border-color: var(--text-success, var(--interactive-accent));
+}
+
+.dbx-sync-conflict-code-selected-both {
+  border-color: var(--interactive-accent);
+}
+
+.dbx-sync-conflict-label-bold {
+  font-weight: 600;
+}
+
+/* ── Conflict Modal: Image Compare ── */
+
+.dbx-sync-conflict-img-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.dbx-sync-conflict-img-grid-mobile {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.dbx-sync-conflict-img-preview {
+  max-width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-secondary);
+}
+
+.dbx-sync-conflict-img-preview-mobile {
+  max-width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-secondary);
+}
+
+/* ── Log Viewer Modal ── */
+
+.dbx-sync-log-textarea {
+  width: 100%;
+  height: 400px;
+  font-size: 11px;
+  font-family: monospace;
+  resize: vertical;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 8px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+
+/* ── Sync Status Modal ── */
+
+.dbx-sync-status-error {
+  color: var(--text-error);
+}
+
+.dbx-sync-status-accent {
+  color: var(--text-accent);
+}
+
+.dbx-sync-status-success {
+  color: var(--text-success, var(--text-normal));
+}
+
+/* ── Status Bar ── */
+
+.dbx-sync-statusbar-clickable {
+  cursor: pointer;
+}
+
+.dbx-sync-statusbar-muted {
+  color: var(--text-muted);
+}
+
+.dbx-sync-statusbar-error {
+  color: var(--text-error);
+}
+
+/* ── Onboarding Modal ── */
+
+.dbx-sync-onboard-steps {
+  padding-left: 20px;
+  line-height: 1.8;
+}
+
+/* ── Settings Tab ── */
+
+.dbx-sync-settings-status-bar {
+  padding-top: 28px;
+  padding-bottom: 28px;
+}
+
+.dbx-sync-settings-exclude-textarea {
+  width: 100%;
+}

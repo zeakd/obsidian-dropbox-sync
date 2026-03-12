@@ -22,7 +22,7 @@ export class StatusBar {
   }
 
   onClick(callback: () => void): void {
-    this.el.style.cursor = "pointer";
+    this.el.addClass("dbx-sync-statusbar-clickable");
     this.el.addEventListener("click", callback);
   }
 
@@ -54,7 +54,7 @@ export class StatusBar {
 
   private render(): void {
     this.el.empty();
-    this.el.style.color = "";
+    this.el.removeClass("dbx-sync-statusbar-muted", "dbx-sync-statusbar-error");
 
     switch (this._lastStatus) {
       case "idle":
@@ -62,7 +62,7 @@ export class StatusBar {
           this.el.setText("Dropbox: idle");
         } else {
           this.el.setText("Dropbox: off");
-          this.el.style.color = "var(--text-muted)";
+          this.el.addClass("dbx-sync-statusbar-muted");
         }
         break;
       case "syncing":
@@ -73,7 +73,7 @@ export class StatusBar {
         break;
       case "error":
         this.el.setText(`Dropbox: ${this._lastDetail ?? "error"}`);
-        this.el.style.color = "var(--text-error)";
+        this.el.addClass("dbx-sync-statusbar-error");
         break;
     }
   }

@@ -2,6 +2,7 @@ import { Menu, Notice, Platform, Plugin, TFile } from "obsidian";
 import {
   DEFAULT_SETTINGS,
   generateDeviceId,
+  getDefaultExcludePatterns,
   getEffectiveAppKey,
   getEffectiveRemotePath,
   type PluginSettings,
@@ -54,7 +55,7 @@ export default class DropboxSyncPlugin extends Plugin {
 
   private log(msg: string, data?: unknown): Promise<void> {
     if (!this.logger) {
-      console.log("[Dropbox Sync]", msg, data ?? "");
+      console.debug("[Dropbox Sync]", msg, data ?? "");
       return Promise.resolve();
     }
     return this.logger.log(msg, data);
@@ -65,8 +66,16 @@ export default class DropboxSyncPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
 
+    let needsSave = false;
     if (!this.settings.deviceId) {
       this.settings.deviceId = generateDeviceId();
+      needsSave = true;
+    }
+    if (this.settings.excludePatterns.length === 0) {
+      this.settings.excludePatterns = getDefaultExcludePatterns(this.app.vault.configDir);
+      needsSave = true;
+    }
+    if (needsSave) {
       await this.saveSettings();
     }
 
@@ -99,7 +108,7 @@ export default class DropboxSyncPlugin extends Plugin {
     }
 
     // UI: 리본 + 상태 바
-    this.ribbonEl = this.addRibbonIcon("refresh-cw", "Dropbox Sync", () => this.syncNow());
+    this.ribbonEl = this.addRibbonIcon("refresh-cw", "Dropbox sync", () => this.syncNow());
     this.ribbonEl.addEventListener("contextmenu", (evt) => {
       evt.preventDefault();
       this.showContextMenu(evt);
@@ -113,7 +122,7 @@ export default class DropboxSyncPlugin extends Plugin {
         this.registerVaultEvents();
       }
       this.applySyncState();
-      this.showOnboardingIfNeeded();
+      void this.showOnboardingIfNeeded();
     });
   }
 
@@ -127,7 +136,7 @@ export default class DropboxSyncPlugin extends Plugin {
   // ── Settings ──
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<PluginSettings>);
   }
 
   async saveSettings(): Promise<void> {
@@ -165,11 +174,11 @@ export default class DropboxSyncPlugin extends Plugin {
   async syncNow(): Promise<void> {
     if (this.syncing) return;
     if (!this.settings.syncName) {
-      new Notice("Dropbox Sync: Set a Vault ID in settings first.");
+      new Notice("Dropbox sync: set a vault ID in settings first.");
       return;
     }
     if (!this.settings.refreshToken) {
-      new Notice("Dropbox Sync: Not connected. Open settings to connect.");
+      new Notice("Dropbox sync: not connected. Open settings to connect.");
       return;
     }
     if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -211,7 +220,7 @@ export default class DropboxSyncPlugin extends Plugin {
         this.settings.tokenExpiry = 0;
         await this.saveSettings();
         this.statusBar?.update("error", "auth expired");
-        new Notice("Dropbox Sync: Token expired. Please reconnect in settings.");
+        new Notice("Dropbox sync: token expired. Please reconnect in settings.");
         return;
       }
       await this.log("sync error", e);
@@ -235,7 +244,7 @@ export default class DropboxSyncPlugin extends Plugin {
   async startSync(): Promise<void> {
     this.settings.syncEnabled = true;
     await this.saveSettings();
-    this.syncNow();
+    void this.syncNow();
   }
 
   async stopSync(): Promise<void> {
@@ -300,7 +309,7 @@ export default class DropboxSyncPlugin extends Plugin {
         getCursor: async () => this.engineMgr?.store?.getMeta("cursor") ?? null,
         isSyncing: () => this.syncing,
         isEnabled: () => this.settings.syncEnabled && !!this.engineMgr?.store,
-        onChanges: () => this.syncNow(),
+        onChanges: () => { void this.syncNow(); },
         log: (msg, data) => this.log(msg, data),
       });
     }
@@ -309,17 +318,17 @@ export default class DropboxSyncPlugin extends Plugin {
 
   private createEngineDeps() {
     const vaultId = this.app.vault.getName();
-    const fs = new VaultAdapter(this.app.vault, this.settings.excludePatterns);
+    const fs = new VaultAdapter(this.app.vault, this.settings.excludePatterns, this.app.fileManager);
     const remote = new DropboxAdapter({
       appKey: getEffectiveAppKey(this.settings),
       remotePath: getEffectiveRemotePath(this.settings),
       getAccessToken: () => this.settings.accessToken,
       getRefreshToken: () => this.settings.refreshToken,
       getTokenExpiry: () => this.settings.tokenExpiry,
-      onTokenRefreshed: async (accessToken, expiresAt) => {
+      onTokenRefreshed: (accessToken, expiresAt) => {
         this.settings.accessToken = accessToken;
         this.settings.tokenExpiry = expiresAt;
-        await this.saveSettings();
+        void this.saveSettings();
       },
     });
     const store: SyncStateStore = Platform.isIosApp
@@ -342,22 +351,22 @@ export default class DropboxSyncPlugin extends Plugin {
       },
       deleteProtection: this.settings.deleteProtection,
       deleteThreshold: this.settings.deleteThreshold,
-      onDeleteGuardTriggered: async (guard: DeleteGuardResult) => {
+      onDeleteGuardTriggered: (guard: DeleteGuardResult): Promise<boolean> => {
         // Previously approved deletions — execute without modal
         if (this.deleteGuardApproved) {
           this.deleteGuardApproved = false;
-          return true;
+          return Promise.resolve(true);
         }
         // Non-blocking: skip deletions now, show modal async.
         // If user approves, flag it and schedule follow-up sync.
         const modal = new DeleteConfirmModal(this.app, guard.deleteItems);
-        modal.waitForConfirmation().then((approved) => {
+        void modal.waitForConfirmation().then((approved) => {
           if (approved) {
             this.deleteGuardApproved = true;
             this.scheduleDebouncedSync();
           }
         });
-        return false;
+        return Promise.resolve(false);
       },
       isFileActive: (path: string) => this.app.workspace.getActiveFile()?.path === path,
       excludePatterns: this.settings.excludePatterns,
@@ -442,7 +451,7 @@ export default class DropboxSyncPlugin extends Plugin {
     const shouldRun = this.settings.syncEnabled && !!this.settings.refreshToken && !!this.settings.syncName;
     if (shouldRun) {
       this.clearSyncTimer();
-      this.syncTimerId = window.setInterval(() => this.syncNow(), this.settings.syncInterval * 1000);
+      this.syncTimerId = window.setInterval(() => { void this.syncNow(); }, this.settings.syncInterval * 1000);
       this.registerInterval(this.syncTimerId);
     } else {
       this.clearSyncTimer();
@@ -454,7 +463,7 @@ export default class DropboxSyncPlugin extends Plugin {
     this.clearDebounceTimer();
     this.debounceTimerId = window.setTimeout(() => {
       this.debounceTimerId = null;
-      this.syncNow();
+      void this.syncNow();
     }, DEBOUNCE_DELAY_MS);
   }
 
@@ -487,10 +496,10 @@ export default class DropboxSyncPlugin extends Plugin {
         version: this.manifest.version,
       },
       {
-        onSyncNow: () => this.syncNow(),
-        onToggleSync: () => this.settings.syncEnabled ? this.stopSync() : this.startSync(),
+        onSyncNow: () => { void this.syncNow(); },
+        onToggleSync: () => { void (this.settings.syncEnabled ? this.stopSync() : this.startSync()); },
         onOpenSettings: () => this.openSettings(),
-        onViewLogs: () => this.showLogs(),
+        onViewLogs: () => { void this.showLogs(); },
         checkRemote: () => this.checkRemoteChanges(),
       },
     ).open();
@@ -499,7 +508,7 @@ export default class DropboxSyncPlugin extends Plugin {
   private showContextMenu(evt: MouseEvent): void {
     const menu = new Menu();
     menu.addItem((item) =>
-      item.setTitle("Sync Now").setIcon("refresh-cw").onClick(() => this.syncNow()),
+      item.setTitle("Sync now").setIcon("refresh-cw").onClick(() => this.syncNow()),
     );
     menu.addItem((item) =>
       item
@@ -520,10 +529,10 @@ export default class DropboxSyncPlugin extends Plugin {
   }
 
   private openSettings(): void {
-    // @ts-expect-error — Obsidian internal API
-    this.app.setting?.open();
-    // @ts-expect-error — Obsidian internal API
-    this.app.setting?.openTabById(this.manifest.id);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any -- Obsidian internal API
+    (this.app as any).setting?.open();
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any -- Obsidian internal API
+    (this.app as any).setting?.openTabById(this.manifest.id);
   }
 
   private reportSyncResult(result: SyncResult, deletesSkipped?: number): void {
@@ -531,7 +540,7 @@ export default class DropboxSyncPlugin extends Plugin {
       for (const f of result.failed) {
         const err = f.error;
         const detail = err ? { message: err.message, name: err.name, stack: err.stack?.split("\n").slice(0, 3).join(" | ") } : err;
-        this.log(`FAIL ${f.item.action.type} ${f.item.localPath}`, detail);
+        void this.log(`FAIL ${f.item.action.type} ${f.item.localPath}`, detail);
       }
       this.lastSyncSummary = `${result.failed.length} failed, ${result.succeeded.length} ok`;
       this.statusBar?.update("error", `${result.failed.length} failed`);

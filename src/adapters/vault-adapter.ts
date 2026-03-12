@@ -1,4 +1,4 @@
-import type { Vault, TFile, TAbstractFile } from "obsidian";
+import type { Vault, TFile, TAbstractFile, FileManager } from "obsidian";
 import type { FileSystem } from "./interfaces";
 import type { FileInfo } from "../types";
 import { dropboxContentHashBrowser } from "../hash.browser";
@@ -22,7 +22,7 @@ interface HashCacheEntry {
 export class VaultAdapter implements FileSystem {
   private hashCache = new Map<string, HashCacheEntry>();
 
-  constructor(private vault: Vault, private excludePatterns: string[] = []) {}
+  constructor(private vault: Vault, private excludePatterns: string[] = [], private fileManager: FileManager) {}
 
   async read(path: string): Promise<Uint8Array> {
     const file = this.getFile(path);
@@ -45,7 +45,7 @@ export class VaultAdapter implements FileSystem {
   async delete(path: string): Promise<void> {
     const file = this.vault.getAbstractFileByPath(path);
     if (file) {
-      await this.vault.trash(file, false);
+      await this.fileManager.trashFile(file);
     }
   }
 
@@ -82,6 +82,7 @@ export class VaultAdapter implements FileSystem {
     return result;
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- async wraps sync throw into rejection
   async stat(path: string): Promise<{ mtime: number; size: number }> {
     const file = this.getFile(path);
     return { mtime: file.stat.mtime, size: file.stat.size };

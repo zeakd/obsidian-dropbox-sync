@@ -26,8 +26,7 @@ export class ConflictModal extends Modal {
     const { contentEl, context } = this;
     const mobile = Platform.isMobile;
 
-    this.modalEl.style.maxWidth = mobile ? "95vw" : "90vw";
-    this.modalEl.style.width = mobile ? "95vw" : "90vw";
+    this.modalEl.addClass(mobile ? "dbx-sync-conflict-modal-wide-mobile" : "dbx-sync-conflict-modal-wide");
 
     const title = this.progress && this.progress.total > 1
       ? `Sync Conflict (${this.progress.index}/${this.progress.total})`
@@ -80,14 +79,9 @@ export class ConflictModal extends Modal {
       });
     }
 
-    const scrollContainer = el.createDiv();
-    scrollContainer.style.maxHeight = mobile ? "50vh" : "60vh";
-    scrollContainer.style.overflow = "auto";
-    scrollContainer.style.marginBottom = "16px";
-    scrollContainer.style.border = "1px solid var(--background-modifier-border)";
-    scrollContainer.style.borderRadius = "4px";
-    scrollContainer.style.padding = "12px";
-    scrollContainer.style.background = "var(--background-secondary)";
+    const scrollContainer = el.createDiv({
+      cls: mobile ? "dbx-sync-conflict-scroll-mobile" : "dbx-sync-conflict-scroll",
+    });
 
     let conflictIdx = 0;
     for (const seg of segments) {
@@ -107,10 +101,12 @@ export class ConflictModal extends Modal {
       ).length;
       if (unresolved > 0) {
         statusEl.textContent = `${unresolved} unresolved`;
-        statusEl.style.color = "var(--text-error)";
+        statusEl.removeClass("dbx-sync-conflict-status-resolved");
+        statusEl.addClass("dbx-sync-conflict-status-unresolved");
       } else {
         statusEl.textContent = "All resolved";
-        statusEl.style.color = "var(--text-success, var(--text-normal))";
+        statusEl.removeClass("dbx-sync-conflict-status-unresolved");
+        statusEl.addClass("dbx-sync-conflict-status-resolved");
       }
     };
     updateStatus();
@@ -175,13 +171,7 @@ export class ConflictModal extends Modal {
 
   private renderResolvedBlock(parent: HTMLElement, lines: string[]): void {
     if (lines.length === 0) return;
-    const block = parent.createDiv();
-    block.style.fontFamily = "monospace";
-    block.style.fontSize = "11px";
-    block.style.whiteSpace = "pre-wrap";
-    block.style.wordBreak = "break-word";
-    block.style.color = "var(--text-muted)";
-    block.style.padding = "2px 0";
+    const block = parent.createDiv({ cls: "dbx-sync-conflict-resolved-block" });
 
     // 긴 동일 블록은 접기
     if (lines.length > 6) {
@@ -190,10 +180,8 @@ export class ConflictModal extends Modal {
       block.createDiv({ text: first.join("\n") });
       const collapsed = block.createDiv({
         text: `  ... ${lines.length - 4} unchanged lines ...`,
+        cls: "dbx-sync-conflict-collapsed-hint",
       });
-      collapsed.style.color = "var(--text-faint)";
-      collapsed.style.fontStyle = "italic";
-      collapsed.style.cursor = "pointer";
       const rest = block.createDiv({ text: last.join("\n") });
 
       let expanded = false;
@@ -218,36 +206,13 @@ export class ConflictModal extends Modal {
     idx: number,
     total: number,
   ): void {
-    const card = parent.createDiv();
-    card.style.border = "1px solid var(--text-error)";
-    card.style.borderRadius = "6px";
-    card.style.margin = "8px 0";
-    card.style.overflow = "hidden";
+    const card = parent.createDiv({ cls: "dbx-sync-conflict-card" });
 
     // 헤더
-    const header = card.createDiv();
-    header.style.background = "rgba(255, 80, 80, 0.1)";
-    header.style.padding = "4px 8px";
-    header.style.fontSize = "11px";
-    header.style.fontWeight = "600";
+    const header = card.createDiv({ cls: "dbx-sync-conflict-header" });
     header.textContent = `Conflict ${idx}/${total}`;
 
-    const body = card.createDiv();
-    body.style.padding = "8px";
-
-    const codeStyle = (div: HTMLDivElement, bg: string) => {
-      div.style.fontFamily = "monospace";
-      div.style.fontSize = "11px";
-      div.style.whiteSpace = "pre-wrap";
-      div.style.wordBreak = "break-word";
-      div.style.padding = "6px 8px";
-      div.style.borderRadius = "4px";
-      div.style.background = bg;
-      div.style.cursor = "pointer";
-      div.style.border = "2px solid transparent";
-      div.style.marginBottom = "4px";
-      div.style.transition = "border-color 0.15s";
-    };
+    const body = card.createDiv({ cls: "dbx-sync-conflict-body" });
 
     const hasLocal = seg.local.length > 0;
     const hasRemote = seg.remote.length > 0;
@@ -258,26 +223,24 @@ export class ConflictModal extends Modal {
     const localLabel = hasRemote ? "Local" : "Local only (keep?)";
     localRow.createEl("span", {
       text: localLabel,
-      cls: "setting-item-description",
-    }).style.fontWeight = "600";
+      cls: "setting-item-description dbx-sync-conflict-label-bold",
+    });
     const localCode = localRow.createDiv({
       text: hasLocal ? seg.local.join("\n") : "(empty — remove these lines)",
+      cls: `dbx-sync-conflict-code dbx-sync-conflict-code-local${hasLocal ? "" : " dbx-sync-conflict-code-empty"}`,
     });
-    codeStyle(localCode, "rgba(255, 80, 80, 0.08)");
-    if (!hasLocal) localCode.style.fontStyle = "italic";
 
     // Remote 옵션
     const remoteRow = body.createDiv();
     const remoteLabel = hasLocal ? "Remote" : "Remote only (include?)";
     remoteRow.createEl("span", {
       text: remoteLabel,
-      cls: "setting-item-description",
-    }).style.fontWeight = "600";
+      cls: "setting-item-description dbx-sync-conflict-label-bold",
+    });
     const remoteCode = remoteRow.createDiv({
       text: hasRemote ? seg.remote.join("\n") : "(empty — remove these lines)",
+      cls: `dbx-sync-conflict-code dbx-sync-conflict-code-remote${hasRemote ? "" : " dbx-sync-conflict-code-empty"}`,
     });
-    codeStyle(remoteCode, "rgba(80, 200, 80, 0.08)");
-    if (!hasRemote) remoteCode.style.fontStyle = "italic";
 
     // Both 옵션 (양쪽 다 있을 때만)
     let bothCode: HTMLDivElement | null = null;
@@ -285,22 +248,25 @@ export class ConflictModal extends Modal {
       const bothRow = body.createDiv();
       bothRow.createEl("span", {
         text: "Both (local + remote)",
-        cls: "setting-item-description",
-      }).style.fontWeight = "600";
+        cls: "setting-item-description dbx-sync-conflict-label-bold",
+      });
       bothCode = bothRow.createDiv({
         text: [...seg.local, ...seg.remote].join("\n"),
+        cls: "dbx-sync-conflict-code dbx-sync-conflict-code-both",
       });
-      codeStyle(bothCode, "rgba(100, 150, 255, 0.08)");
     }
 
     const select = (choice: "local" | "remote" | "both") => {
       seg.choice = choice;
-      localCode.style.borderColor = choice === "local" ? "var(--text-error)" : "transparent";
-      remoteCode.style.borderColor = choice === "remote" ? "var(--text-success, var(--interactive-accent))" : "transparent";
-      if (bothCode) bothCode.style.borderColor = choice === "both" ? "var(--interactive-accent)" : "transparent";
-      header.style.background = "rgba(80, 200, 80, 0.1)";
+      localCode.removeClass("dbx-sync-conflict-code-selected-local");
+      remoteCode.removeClass("dbx-sync-conflict-code-selected-remote");
+      if (bothCode) bothCode.removeClass("dbx-sync-conflict-code-selected-both");
+      if (choice === "local") localCode.addClass("dbx-sync-conflict-code-selected-local");
+      if (choice === "remote") remoteCode.addClass("dbx-sync-conflict-code-selected-remote");
+      if (choice === "both" && bothCode) bothCode.addClass("dbx-sync-conflict-code-selected-both");
+      header.addClass("dbx-sync-conflict-header-resolved");
       header.textContent = `Conflict ${idx}/${total} — ${choice}`;
-      card.style.borderColor = "var(--text-success, var(--interactive-accent))";
+      card.addClass("dbx-sync-conflict-card-resolved");
       parent.dispatchEvent(new Event("conflict-resolved"));
     };
 
@@ -314,32 +280,20 @@ export class ConflictModal extends Modal {
   private renderImageCompare(el: HTMLElement, localData: Uint8Array, remoteData: Uint8Array, mobile: boolean): void {
     const mime = this.guessMime(this.filePath);
 
-    const container = el.createDiv();
-    container.style.display = "grid";
-    container.style.gridTemplateColumns = mobile ? "1fr" : "1fr 1fr";
-    container.style.gap = "8px";
-    container.style.marginBottom = "16px";
-
-    const imgStyle = (img: HTMLImageElement) => {
-      img.style.maxWidth = "100%";
-      img.style.maxHeight = mobile ? "200px" : "300px";
-      img.style.objectFit = "contain";
-      img.style.border = "1px solid var(--background-modifier-border)";
-      img.style.borderRadius = "4px";
-      img.style.background = "var(--background-secondary)";
-    };
+    const imgCls = mobile ? "dbx-sync-conflict-img-preview-mobile" : "dbx-sync-conflict-img-preview";
+    const container = el.createDiv({
+      cls: mobile ? "dbx-sync-conflict-img-grid-mobile" : "dbx-sync-conflict-img-grid",
+    });
 
     const localCol = container.createDiv();
     localCol.createEl("h4", { text: `Local (${this.formatSize(localData.length)})` });
-    const localImg = localCol.createEl("img");
+    const localImg = localCol.createEl("img", { cls: imgCls });
     localImg.src = `data:${mime};base64,${uint8ToBase64(localData)}`;
-    imgStyle(localImg);
 
     const remoteCol = container.createDiv();
     remoteCol.createEl("h4", { text: `Remote (${this.formatSize(remoteData.length)})` });
-    const remoteImg = remoteCol.createEl("img");
+    const remoteImg = remoteCol.createEl("img", { cls: imgCls });
     remoteImg.src = `data:${mime};base64,${uint8ToBase64(remoteData)}`;
-    imgStyle(remoteImg);
   }
 
   // ── 메타데이터 / 간단 버튼 ──

@@ -33,7 +33,7 @@ export function registerDemoCommands(plugin: DropboxSyncPlugin): void {
 
   plugin.addCommand({
     id: "inject-conflict",
-    name: "Debug: Inject conflict on current file",
+    name: "Debug: inject conflict on current file",
     callback: () => injectConflict(plugin),
   });
 }
@@ -107,7 +107,7 @@ async function showDemoConflictMulti(plugin: DropboxSyncPlugin): Promise<void> {
     }, { index: i + 1, total: files.length });
     reportChoice(f.path, await modal.waitForChoice());
   }
-  new Notice("Demo: All conflicts resolved.");
+  new Notice("Demo: all conflicts resolved.");
 }
 
 function showDemoConflictImage(plugin: DropboxSyncPlugin): void {
@@ -123,7 +123,7 @@ function showDemoConflictImage(plugin: DropboxSyncPlugin): void {
     remoteSize: remoteData.length,
     remoteMtime: Date.now() - 1800000,
   });
-  modal.waitForChoice().then((choice) => reportChoice("diagram.svg", choice));
+  void modal.waitForChoice().then((choice) => reportChoice("diagram.svg", choice));
 }
 
 async function injectConflict(plugin: DropboxSyncPlugin): Promise<void> {

@@ -4,6 +4,7 @@
  */
 
 /** 금지 문자 (Dropbox API 실제 제한: NUL, 제어문자) */
+// eslint-disable-next-line no-control-regex -- 제어문자 감지가 이 함수의 목적
 const FORBIDDEN_CHARS = /[\x00-\x1f\x7f]/;
 
 /**

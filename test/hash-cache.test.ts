@@ -69,7 +69,7 @@ describe("VaultAdapter hash cache", () => {
       { path: "a.md", stat: { mtime: 1000, size: 5 }, extension: "md", data: textToBuffer("hello") },
       { path: "b.md", stat: { mtime: 2000, size: 5 }, extension: "md", data: textToBuffer("world") },
     ]);
-    adapter = new VaultAdapter(vault as never);
+    adapter = new VaultAdapter(vault as never, [], {} as never);
   });
 
   test("첫 list(): 모든 파일 readBinary 호출", async () => {
@@ -154,7 +154,7 @@ describe("VaultAdapter hash cache", () => {
       { path: "x.md", stat: { mtime: 1000, size: 4 }, extension: "md", data: textToBuffer("same") },
       { path: "y.md", stat: { mtime: 2000, size: 4 }, extension: "md", data: textToBuffer("same") },
     ]);
-    adapter = new VaultAdapter(vault as never);
+    adapter = new VaultAdapter(vault as never, [], {} as never);
 
     const files = await adapter.list();
     expect(files[0].hash).toBe(files[1].hash);
@@ -178,7 +178,7 @@ describe("VaultAdapter hash cache", () => {
       { path: "notes/a.md", stat: { mtime: 1000, size: 3 }, extension: "md", data: textToBuffer("aaa") },
       { path: ".trash/b.md", stat: { mtime: 2000, size: 3 }, extension: "md", data: textToBuffer("bbb") },
     ]);
-    adapter = new VaultAdapter(vault as never);
+    adapter = new VaultAdapter(vault as never, [], {} as never);
 
     const files = await adapter.list();
     expect(files).toHaveLength(1);

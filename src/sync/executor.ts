@@ -156,7 +156,7 @@ async function executeItem(
               return;
             }
             throw new Error(
-              `Rev conflict for "${localPath}" and conflict resolution also failed: ${conflictErr}`,
+              `Rev conflict for "${localPath}" and conflict resolution also failed: ${conflictErr instanceof Error ? conflictErr.message : String(conflictErr)}`,
             );
           }
           return;

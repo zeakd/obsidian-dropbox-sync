@@ -12,11 +12,8 @@ export async function dropboxContentHashBrowser(
 
   for (let offset = 0; offset < data.length; offset += BLOCK_SIZE) {
     const end = Math.min(offset + BLOCK_SIZE, data.length);
-    const block = data.buffer.slice(
-      data.byteOffset + offset,
-      data.byteOffset + end,
-    ) as ArrayBuffer;
-    const hash = await crypto.subtle.digest("SHA-256", block);
+    const block = data.subarray(offset, end);
+    const hash = await crypto.subtle.digest("SHA-256", block as Uint8Array<ArrayBuffer>);
     blockHashes.push(hash);
   }
 
@@ -28,7 +25,7 @@ export async function dropboxContentHashBrowser(
     pos += h.byteLength;
   }
 
-  const finalHash = await crypto.subtle.digest("SHA-256", concat.buffer as ArrayBuffer);
+  const finalHash = await crypto.subtle.digest("SHA-256", concat.buffer);
   return Array.from(new Uint8Array(finalHash))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");

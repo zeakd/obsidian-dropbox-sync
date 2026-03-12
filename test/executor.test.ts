@@ -63,7 +63,7 @@ describe("executePlan", () => {
     const entry = await store.getEntry("test.md");
     expect(entry).not.toBeNull();
     expect(entry!.rev).toBeTruthy();
-    expect(entry!.baseLocalHash).toBe(dropboxContentHash(data));
+    expect(entry!.baseLocalHash).toBe(await dropboxContentHash(data));
   });
 
   test("upload: rev 충돌 → conflict 파일 생성", async () => {
@@ -173,7 +173,7 @@ describe("executePlan", () => {
     // state 갱신됨
     const entry = await store.getEntry("test.md");
     expect(entry).not.toBeNull();
-    expect(entry!.baseLocalHash).toBe(dropboxContentHash(data));
+    expect(entry!.baseLocalHash).toBe(await dropboxContentHash(data));
   });
 
   // ── deleteLocal ──
@@ -266,8 +266,8 @@ describe("executePlan", () => {
       localPath: "test.md",
       action: {
         type: "conflict",
-        localHash: dropboxContentHash(localData),
-        remoteHash: dropboxContentHash(remoteData),
+        localHash: await dropboxContentHash(localData),
+        remoteHash: await dropboxContentHash(remoteData),
       },
     });
 
@@ -574,8 +574,8 @@ describe("executePlan", () => {
       localPath: "test.md",
       action: {
         type: "conflict",
-        localHash: dropboxContentHash(localData),
-        remoteHash: dropboxContentHash(remoteData),
+        localHash: await dropboxContentHash(localData),
+        remoteHash: await dropboxContentHash(remoteData),
       },
     });
 
@@ -607,8 +607,8 @@ describe("executePlan", () => {
       localPath: "test.md",
       action: {
         type: "conflict",
-        localHash: dropboxContentHash(localData),
-        remoteHash: dropboxContentHash(remoteData),
+        localHash: await dropboxContentHash(localData),
+        remoteHash: await dropboxContentHash(remoteData),
       },
     });
 
@@ -637,8 +637,8 @@ describe("executePlan", () => {
       localPath: "test.md",
       action: {
         type: "conflict",
-        localHash: dropboxContentHash(localData),
-        remoteHash: dropboxContentHash(remoteData),
+        localHash: await dropboxContentHash(localData),
+        remoteHash: await dropboxContentHash(remoteData),
       },
     });
 
@@ -669,8 +669,8 @@ describe("executePlan", () => {
       localPath: "test.md",
       action: {
         type: "conflict",
-        localHash: dropboxContentHash(localData),
-        remoteHash: dropboxContentHash(remoteData),
+        localHash: await dropboxContentHash(localData),
+        remoteHash: await dropboxContentHash(remoteData),
       },
     });
 
@@ -698,8 +698,8 @@ describe("executePlan", () => {
       localPath: "test.md",
       action: {
         type: "conflict",
-        localHash: dropboxContentHash(localData),
-        remoteHash: dropboxContentHash(remoteData),
+        localHash: await dropboxContentHash(localData),
+        remoteHash: await dropboxContentHash(remoteData),
       },
     });
 
@@ -866,8 +866,8 @@ describe("executePlan", () => {
       localPath: "test.md",
       action: {
         type: "conflict",
-        localHash: dropboxContentHash(localData),
-        remoteHash: dropboxContentHash(remoteData),
+        localHash: await dropboxContentHash(localData),
+        remoteHash: await dropboxContentHash(remoteData),
       },
     });
 
@@ -888,8 +888,8 @@ describe("executePlan", () => {
       localPath: "test.md",
       action: {
         type: "conflict",
-        localHash: dropboxContentHash(localData),
-        remoteHash: dropboxContentHash(remoteData),
+        localHash: await dropboxContentHash(localData),
+        remoteHash: await dropboxContentHash(remoteData),
       },
     });
 

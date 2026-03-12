@@ -13,7 +13,7 @@ export interface LogStorage {
 export interface LogManagerOptions {
   maxLines?: number;
   flushSize?: number;
-  /** false로 설정하면 console.log 출력을 억제 */
+  /** false로 설정하면 console.debug 출력을 억제 */
   consoleOutput?: boolean;
 }
 
@@ -47,7 +47,7 @@ export class LogManager {
       ? `${data.name}: ${data.message}` + (data.stack ? `\n${data.stack}` : "")
       : data !== undefined ? JSON.stringify(data) : "";
     const line = detail ? `[${ts}] ${msg} ${detail}` : `[${ts}] ${msg}`;
-    if (this.consoleOutput) console.log("[Dropbox Sync]", msg, data ?? "");
+    if (this.consoleOutput) console.debug("[Dropbox Sync]", msg, data ?? "");
     this.buffer.push(line);
     if (this.buffer.length >= this.flushSize) {
       await this.flush();

@@ -197,7 +197,7 @@ export function createPlan(
       localFile?.path ?? remoteEntry?.pathDisplay ?? baseEntry?.localPath ?? pathLower;
 
     items.push({ pathLower, localPath, action });
-    stats[action.type as keyof Omit<typeof stats, "noop">]++;
+    stats[action.type]++;
   }
 
   return { items, stats };

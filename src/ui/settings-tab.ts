@@ -2,7 +2,7 @@ import { App, Platform, PluginSettingTab, Setting, Notice, TFile } from "obsidia
 import type { ConflictStrategy } from "../types";
 import type DropboxSyncPlugin from "../main";
 import { ConfirmModal } from "./confirm-modal";
-import { DEFAULT_APP_KEY, getEffectiveAppKey, isValidSyncName, sanitizeSyncName } from "../settings";
+import { DEFAULT_APP_KEY, getEffectiveAppKey, isValidSyncName } from "../settings";
 import {
   generateCodeVerifier,
   generateCodeChallenge,
@@ -37,8 +37,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
     // ── Status bar ──
     const version = `v${this.plugin.manifest.version}`;
     const status = new Setting(containerEl);
-    status.settingEl.style.paddingTop = "28px";
-    status.settingEl.style.paddingBottom = "28px";
+    status.settingEl.addClass("dbx-sync-settings-status-bar");
     if (syncRunning) {
       status
         .setName(`Sync is running · ${version}`)
@@ -53,7 +52,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
     } else if (isConnected) {
       status
         .setName(`Not syncing · ${version}`)
-        .setDesc("Set a Vault ID to get started.");
+        .setDesc("Set a vault ID to get started.");
     } else {
       status
         .setName(`Not connected · ${version}`)
@@ -93,7 +92,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
       .setName("View sync logs")
       .setDesc(`Device: ${this.plugin.settings.deviceId || "unknown"}`)
       .addButton((btn) =>
-        btn.setButtonText("View Logs").onClick(async () => {
+        btn.setButtonText("View logs").onClick(async () => {
           const content = await this.plugin.readLogs();
           new LogViewerModal(this.app, content, this.plugin.settings.deviceId).open();
         }),
@@ -138,7 +137,8 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
 
   // 최초 설정: 이름 입력 + Set
   private renderSyncNameSetup(containerEl: HTMLElement): void {
-    const defaultName = sanitizeSyncName(this.app.vault.getName());
+    const rawName = this.app.vault.getName().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 100);
+    const defaultName = isValidSyncName(rawName) ? rawName : "vault";
     let inputName = defaultName;
     let setBtnEl: HTMLButtonElement | null = null;
     const setting = new Setting(containerEl)
@@ -165,7 +165,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
           .setCta()
           .onClick(async () => {
             if (!isValidSyncName(inputName)) {
-              new Notice("Invalid Vault ID.");
+              new Notice("Invalid vault ID.");
               return;
             }
             const fileCount = await this.plugin.checkRemoteFolder(inputName);
@@ -196,7 +196,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
     let changeBtnEl: HTMLButtonElement | null = null;
 
     const setting = new Setting(containerEl)
-      .setName("Change Vault ID")
+      .setName("Change vault ID")
       .addText((text) =>
         text.setValue(savedName).onChange((value) => {
           pendingName = value.trim();
@@ -218,7 +218,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
           .setButtonText("Change")
           .onClick(async () => {
             if (!isValidSyncName(pendingName)) {
-              new Notice("Invalid Vault ID. Use only letters, numbers, hyphens, underscores.");
+              new Notice("Invalid vault ID. Use only letters, numbers, hyphens, underscores.");
               return;
             }
             if (pendingName === savedName) return;
@@ -278,7 +278,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName("Setup required")
         .setDesc(
-          "No App Key configured. Set your App Key below first.",
+          "No app key configured. Set your app key below first.",
         );
       return;
     }
@@ -304,14 +304,14 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName("Setup required")
         .setDesc(
-          "No App Key configured. Set your App Key below first.",
+          "No app key configured. Set your app key below first.",
         );
       return;
     }
 
     // Step 1: 인증 URL 열기
     new Setting(containerEl)
-      .setName("Step 1: Authorize")
+      .setName("Step 1: authorize")
       .setDesc("Open Dropbox in your browser to authorize this plugin.")
       .addButton((btn) =>
         btn
@@ -328,7 +328,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
     // Step 2: 인증 코드 입력
     let authCodeInput = "";
     new Setting(containerEl)
-      .setName("Step 2: Enter authorization code")
+      .setName("Step 2: enter authorization code")
       .setDesc("Paste the code from Dropbox here.")
       .addText((text) =>
         text
@@ -340,7 +340,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
       .addButton((btn) =>
         btn.setButtonText("Connect").onClick(async () => {
           if (!authCodeInput || !this.codeVerifier) {
-            new Notice("Please complete Step 1 first, then paste the code.");
+            new Notice("Please complete step 1 first, then paste the code.");
             return;
           }
           try {
@@ -398,7 +398,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
 
     const excludeSetting = new Setting(containerEl)
       .setName("Exclude patterns")
-      .setDesc("Files matching these patterns won't sync. One per line. Examples: *.pdf, attachments/, .obsidian/workspace*")
+      .setDesc(`Files matching these patterns won't sync. One per line. Examples: *.pdf, attachments/, ${this.app.vault.configDir}/workspace*`)
       .addTextArea((text) => {
         text
           .setValue(this.plugin.settings.excludePatterns.join("\n"))
@@ -412,7 +412,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
             this.updateExcludeCount(excludeSetting);
           });
         text.inputEl.rows = 4;
-        text.inputEl.style.width = "100%";
+        text.inputEl.addClass("dbx-sync-settings-exclude-textarea");
       });
     this.updateExcludeCount(excludeSetting);
 
@@ -496,7 +496,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
       })();
 
       new Setting(containerEl)
-        .setName("Use custom App Key")
+        .setName("Use custom app key")
         .setDesc(appKeyDesc)
         .addToggle((toggle) =>
           toggle
@@ -512,7 +512,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
 
     if (this.plugin.settings.useCustomAppKey || !DEFAULT_APP_KEY) {
       new Setting(containerEl)
-        .setName("App Key")
+        .setName("App key")
         .setDesc(
           isConnected
             ? "Disconnect first to change App Key."
@@ -534,7 +534,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
   private updateExcludeCount(setting: Setting): void {
     const patterns = this.plugin.settings.excludePatterns;
     if (patterns.length === 0) {
-      setting.setDesc("Files matching these patterns won't sync. One per line. Examples: *.pdf, attachments/, .obsidian/workspace*");
+      setting.setDesc(`Files matching these patterns won't sync. One per line. Examples: *.pdf, attachments/, ${this.app.vault.configDir}/workspace*`);
       return;
     }
     const allFiles = this.app.vault.getFiles();

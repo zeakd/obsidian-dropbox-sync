@@ -29,7 +29,7 @@ export class DesktopAuth {
   async start(): Promise<void> {
     const appKey = this.getAppKey();
     if (!appKey) {
-      new Notice("No App Key configured. Set your App Key in Connection settings.");
+      new Notice("No app key configured. Set your app key in connection settings.");
       return;
     }
 

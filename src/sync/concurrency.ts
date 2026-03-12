@@ -23,7 +23,7 @@ export async function runWithConcurrency<T>(
   concurrency: number,
   options?: ConcurrencyOptions,
 ): Promise<SettledResult<T>[]> {
-  const results: SettledResult<T>[] = new Array(tasks.length);
+  const results = new Array<SettledResult<T>>(tasks.length);
   let index = 0;
 
   async function worker(): Promise<void> {

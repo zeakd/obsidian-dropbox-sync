@@ -27,7 +27,7 @@ export class LongpollManager {
     this.clearTimer();
     this.timerId = window.setTimeout(() => {
       this.timerId = null;
-      this.run();
+      void this.run();
     }, 1000);
   }
 

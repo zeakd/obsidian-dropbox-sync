@@ -21,7 +21,7 @@ export class DeleteConfirmModal extends Modal {
   onOpen(): void {
     const { contentEl } = this;
 
-    contentEl.createEl("h3", { text: "Delete Protection" });
+    contentEl.createEl("h3", { text: "Delete protection" });
     contentEl.createEl("p", {
       text: `${this.deleteItems.length} files will be deleted. Continue?`,
     });

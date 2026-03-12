@@ -30,12 +30,12 @@ export class SyncStatusModal extends Modal {
     const { contentEl } = this;
     const { info } = this;
 
-    contentEl.createEl("h3", { text: "Dropbox Sync" });
+    contentEl.createEl("h3", { text: "Dropbox sync" });
 
     const statusText = this.formatStatus();
     const statusEl = contentEl.createEl("p", { text: statusText });
     if (info.status === "error") {
-      statusEl.style.color = "var(--text-error)";
+      statusEl.addClass("dbx-sync-status-error");
     }
 
     if (info.lastSyncTime) {
@@ -51,7 +51,7 @@ export class SyncStatusModal extends Modal {
       text: "Dropbox: checking...",
       cls: "setting-item-description",
     });
-    this.checkRemoteStatus(remoteEl);
+    void this.checkRemoteStatus(remoteEl);
 
     contentEl.createEl("p", {
       text: `Device: ${info.deviceId} · v${info.version}`,
@@ -61,7 +61,7 @@ export class SyncStatusModal extends Modal {
     const btnRow = new Setting(contentEl)
       .addButton((btn) =>
         btn
-          .setButtonText("Sync Now")
+          .setButtonText("Sync now")
           .setCta()
           .onClick(() => {
             this.close();
@@ -88,7 +88,7 @@ export class SyncStatusModal extends Modal {
     if (info.status === "error") {
       btnRow.addButton((btn) =>
         btn
-          .setButtonText("View Logs")
+          .setButtonText("View logs")
           .onClick(() => {
             this.close();
             this.actions.onViewLogs();
@@ -113,14 +113,14 @@ export class SyncStatusModal extends Modal {
         el.textContent = "Dropbox: not connected";
       } else if (result.pendingChanges > 0) {
         el.textContent = `Dropbox: ${result.pendingChanges} pending change(s)`;
-        el.style.color = "var(--text-accent)";
+        el.addClass("dbx-sync-status-accent");
       } else {
         el.textContent = "Dropbox: up to date";
-        el.style.color = "var(--text-success, var(--text-normal))";
+        el.addClass("dbx-sync-status-success");
       }
     } catch {
       el.textContent = "Dropbox: check failed";
-      el.style.color = "var(--text-error)";
+      el.addClass("dbx-sync-status-error");
     }
   }
 

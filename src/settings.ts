@@ -35,11 +35,16 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   deleteProtection: true,
   deleteThreshold: 5,
   syncName: "",
-  excludePatterns: [".obsidian/workspace*"],
+  excludePatterns: [],
   deviceId: "",
   syncOnCreateDeleteRename: false,
   onboardingDone: false,
 };
+
+/** configDir 기반 기본 exclude 패턴 (최초 설정 시 적용) */
+export function getDefaultExcludePatterns(configDir: string): string[] {
+  return [`${configDir}/workspace*`];
+}
 
 export function generateDeviceId(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
