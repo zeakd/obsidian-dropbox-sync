@@ -1,6 +1,6 @@
 import { App, Modal, Platform, Setting } from "obsidian";
 import type { ConflictContext } from "../types";
-import { buildMergeSegments, assembleMerged, type ConflictSegment, type MergeSegment } from "./merge-segments";
+import { buildMergeSegments, assembleMerged, type ConflictSegment } from "./merge-segments";
 
 export type ConflictChoice = "local" | "remote" | "skip" | MergedChoice;
 

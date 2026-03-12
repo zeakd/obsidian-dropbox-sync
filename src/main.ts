@@ -529,10 +529,12 @@ export default class DropboxSyncPlugin extends Plugin {
   }
 
   private openSettings(): void {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any -- Obsidian internal API
-    (this.app as any).setting?.open();
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any -- Obsidian internal API
-    (this.app as any).setting?.openTabById(this.manifest.id);
+    /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Obsidian internal API */
+    // @ts-expect-error — app.setting is an undocumented internal API
+    this.app.setting?.open();
+    // @ts-expect-error — app.setting is an undocumented internal API
+    this.app.setting?.openTabById(this.manifest.id);
+    /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
   }
 
   private reportSyncResult(result: SyncResult, deletesSkipped?: number): void {

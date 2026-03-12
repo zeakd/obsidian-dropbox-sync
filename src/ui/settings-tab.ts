@@ -118,8 +118,6 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
       return;
     }
 
-    const syncName = this.plugin.settings.syncName;
-
     new Setting(containerEl)
       .setName("Enable sync")
       .addToggle((toggle) =>

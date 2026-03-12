@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await -- test adapters: async wraps sync throws into Promise rejections */
 import { dropboxContentHash } from "../hash";
 import {
   RevConflictError,
@@ -23,16 +22,19 @@ interface MemoryFile {
 export class MemoryFileSystem implements FileSystem {
   private files = new Map<string, MemoryFile>();
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- async wraps sync throw into rejection
   async read(path: string): Promise<Uint8Array> {
     const file = this.files.get(path);
     if (!file) throw new Error(`File not found: ${path}`);
     return file.data;
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- sync-only implementation
   async write(path: string, data: Uint8Array, mtime?: number): Promise<void> {
     this.files.set(path, { data, mtime: mtime ?? Date.now() });
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- async wraps sync throw into rejection
   async delete(path: string): Promise<void> {
     if (!this.files.has(path)) throw new Error(`File not found: ${path}`);
     this.files.delete(path);
@@ -52,10 +54,11 @@ export class MemoryFileSystem implements FileSystem {
     return result;
   }
 
-  stat(path: string): Promise<{ mtime: number; size: number }> {
+  // eslint-disable-next-line @typescript-eslint/require-await -- async wraps sync throw into rejection
+  async stat(path: string): Promise<{ mtime: number; size: number }> {
     const file = this.files.get(path);
     if (!file) throw new Error(`File not found: ${path}`);
-    return Promise.resolve({ mtime: file.mtime, size: file.data.length });
+    return { mtime: file.mtime, size: file.data.length };
   }
 
   async computeHash(path: string): Promise<string> {
@@ -110,6 +113,7 @@ export class MemoryRemoteStorage implements RemoteStorage {
   private seq = 0;
   private revCounter = 0;
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- sync-only implementation
   async listChanges(cursor?: string): Promise<ListChangesResult> {
     const fromSeq = cursor ? parseInt(cursor, 10) : 0;
     const entries = this.changeLog
@@ -123,6 +127,7 @@ export class MemoryRemoteStorage implements RemoteStorage {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- async wraps sync throw into rejection
   async download(path: string): Promise<DownloadResult> {
     const pathLower = path.toLowerCase();
     const file = this.files.get(pathLower);
@@ -171,6 +176,7 @@ export class MemoryRemoteStorage implements RemoteStorage {
     return this.toRemoteEntry(file);
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- sync-only implementation
   async delete(path: string): Promise<void> {
     const pathLower = path.toLowerCase();
     const file = this.files.get(pathLower);
