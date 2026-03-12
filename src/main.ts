@@ -45,6 +45,7 @@ export default class DropboxSyncPlugin extends Plugin {
   private conflictIndex = 0;
   private conflictTotal = 0;
   private syncDeletedByEngine = new Set<string>();
+  private deleteGuardApproved = false;
 
   // ── 모듈 ──
   private auth: DesktopAuth | null = null;
@@ -342,8 +343,21 @@ export default class DropboxSyncPlugin extends Plugin {
       deleteProtection: this.settings.deleteProtection,
       deleteThreshold: this.settings.deleteThreshold,
       onDeleteGuardTriggered: async (guard: DeleteGuardResult) => {
+        // Previously approved deletions — execute without modal
+        if (this.deleteGuardApproved) {
+          this.deleteGuardApproved = false;
+          return true;
+        }
+        // Non-blocking: skip deletions now, show modal async.
+        // If user approves, flag it and schedule follow-up sync.
         const modal = new DeleteConfirmModal(this.app, guard.deleteItems);
-        return modal.waitForConfirmation();
+        modal.waitForConfirmation().then((approved) => {
+          if (approved) {
+            this.deleteGuardApproved = true;
+            this.scheduleDebouncedSync();
+          }
+        });
+        return false;
       },
       isFileActive: (path: string) => this.app.workspace.getActiveFile()?.path === path,
       excludePatterns: this.settings.excludePatterns,

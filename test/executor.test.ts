@@ -108,6 +108,49 @@ describe("executePlan", () => {
     expect(remoteDl.data).toEqual(localData);
   });
 
+  test("upload: rev 충돌 + remote not_found → stale rev 버리고 fresh upload", async () => {
+    const localData = new TextEncoder().encode("local version");
+    await fs.write("test.md", localData);
+
+    // 원격에 파일 존재 (upload 시 RevConflictError 유발용)
+    const remoteData = new TextEncoder().encode("remote version");
+    await remote.upload("test.md", remoteData);
+
+    // stale rev로 store 설정
+    await store.setEntry({
+      pathLower: "test.md",
+      localPath: "test.md",
+      baseLocalHash: "old_hash",
+      baseRemoteHash: "old_hash",
+      rev: "wrong_rev",
+      lastSynced: 1000,
+    });
+
+    // download를 not_found로 실패시킴 (conflict handler가 remote 파일을 못 찾는 상황)
+    const origDownload = remote.download.bind(remote);
+    let downloadCallCount = 0;
+    remote.download = async (path: string) => {
+      downloadCallCount++;
+      throw new Error(`Dropbox API error 409: path/not_found`);
+    };
+
+    const plan = mkPlan({
+      pathLower: "test.md",
+      localPath: "test.md",
+      action: { type: "upload", reason: "local_modified" },
+    });
+
+    const result = await executePlan(plan, deps);
+    expect(result.succeeded).toHaveLength(1);
+    expect(result.failed).toHaveLength(0);
+    expect(downloadCallCount).toBe(1); // conflict handler가 download 시도함
+
+    // fresh upload으로 복구 → state에 새 rev
+    const entry = await store.getEntry("test.md");
+    expect(entry).not.toBeNull();
+    expect(entry!.rev).not.toBe("wrong_rev");
+  });
+
   // ── download ──
 
   test("download: 원격 파일을 로컬에 다운로드", async () => {

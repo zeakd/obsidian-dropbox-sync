@@ -148,6 +148,13 @@ async function executeItem(
           try {
             await dispatchConflict(item, conflictCtx);
           } catch (conflictErr) {
+            // Remote file was deleted — stale rev is useless.
+            // Upload fresh (no rev) to recover from the loop.
+            if (conflictErr instanceof Error && conflictErr.message.includes("not_found")) {
+              entry = await remote.upload(localPath, data);
+              await updateSyncState(store, pathLower, localPath, localHash, entry.hash ?? localHash, entry.rev);
+              return;
+            }
             throw new Error(
               `Rev conflict for "${localPath}" and conflict resolution also failed: ${conflictErr}`,
             );
