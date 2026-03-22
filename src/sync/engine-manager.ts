@@ -43,6 +43,10 @@ export class EngineManager {
     this.deps = null;
   }
 
+  get fs(): FileSystem | null {
+    return this.deps?.fs ?? null;
+  }
+
   get store(): SyncStateStore | null {
     return this.deps?.store ?? null;
   }

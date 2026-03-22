@@ -28,6 +28,7 @@ import { registerDemoCommands } from "./debug/demo-commands";
 import type { SyncEngine } from "./sync/engine";
 
 import { summarizeActions } from "./sync/sync-reporter";
+import { fetchFileFromRemote } from "./deep-link";
 
 const DEBOUNCE_DELAY_MS = 5000;
 
@@ -108,6 +109,12 @@ export default class DropboxSyncPlugin extends Plugin {
       );
     }
 
+    // Deep link: sync-then-open
+    this.registerObsidianProtocolHandler(
+      "dropbox-sync-open",
+      (params) => { void this.handleOpenFile(params); },
+    );
+
     // UI: 리본 + 상태 바
     this.ribbonEl = this.addRibbonIcon("refresh-cw", "Dropbox sync", () => this.syncNow());
     this.ribbonEl.addEventListener("contextmenu", (evt) => {
@@ -168,6 +175,63 @@ export default class DropboxSyncPlugin extends Plugin {
 
     new Notice("Connected to Dropbox!");
     this.onAuthChange?.();
+  }
+
+  // ── Deep link: sync-then-open ──
+
+  private async handleOpenFile(params: Record<string, string>): Promise<void> {
+    const filePath = params.file ? decodeURIComponent(params.file) : null;
+    if (!filePath) {
+      new Notice("Dropbox Sync: missing 'file' parameter.");
+      return;
+    }
+
+    if (!this.settings.refreshToken) {
+      new Notice("Dropbox Sync: not connected. Open settings to connect first.");
+      return;
+    }
+
+    // 로컬에 이미 있으면 바로 열기
+    const existing = this.app.vault.getAbstractFileByPath(filePath);
+    if (existing && existing instanceof TFile) {
+      await this.app.workspace.getLeaf().openFile(existing);
+      return;
+    }
+
+    // Dropbox에서 다운로드
+    new Notice(`Fetching "${filePath}" from Dropbox…`);
+    await this.log(`deep-link open: ${filePath}`);
+
+    try {
+      this.getOrCreateEngine(); // adapter 초기화 보장
+      const remote = this.engineMgr?.remote;
+      const fs = this.engineMgr?.fs;
+      const store = this.engineMgr?.store;
+      if (!remote || !fs) {
+        new Notice("Dropbox Sync: engine not ready. Try again after sync is configured.");
+        return;
+      }
+
+      const { dropboxContentHashBrowser } = await import("./hash.browser");
+      await fetchFileFromRemote(filePath, {
+        remote,
+        fs,
+        store: store ?? null,
+        computeHash: dropboxContentHashBrowser,
+      });
+
+      // 파일 열기
+      const file = this.app.vault.getAbstractFileByPath(filePath);
+      if (file && file instanceof TFile) {
+        await this.app.workspace.getLeaf().openFile(file);
+      } else {
+        new Notice(`Dropbox Sync: downloaded but could not open "${filePath}".`);
+      }
+    } catch (e) {
+      const msg = (e as Error).message ?? String(e);
+      await this.log(`deep-link open failed: ${filePath}`, e);
+      new Notice(`Dropbox Sync: failed to fetch "${filePath}" — ${msg}`);
+    }
   }
 
   // ── Sync ──
