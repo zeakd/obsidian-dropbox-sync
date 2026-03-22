@@ -10,6 +10,7 @@ Sync your Obsidian vault with Dropbox — across desktop and mobile, automatical
 - **Detects changes instantly** — edits, deletions, and renames sync within seconds
 - **Handles conflicts safely** — when the same file is edited on two devices, you choose what to keep
 - **Protects against accidental deletion** — three safety layers prevent data loss
+- **Opens unsynced files on demand** — click a link, and the plugin downloads from Dropbox before opening
 
 ## Getting started
 
@@ -65,6 +66,12 @@ If the same file was edited on two devices before syncing, the plugin needs to d
 | **Ask me** | A side-by-side comparison opens so you can pick what to keep. |
 
 Read more: [How conflict resolution works](docs/conflict-resolution.md)
+
+### Opening files via link
+
+Use a URL to open a file directly — if it hasn't synced yet, the plugin downloads it first.
+
+Read more: [Deep link: sync & open](docs/deep-link.md)
 
 ### Excluding files from sync
 
