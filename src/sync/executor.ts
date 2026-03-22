@@ -10,6 +10,7 @@ import {
   dispatchConflict,
 } from "./conflict-handlers";
 import type { ConflictHandlerDeps } from "./conflict-handlers";
+import type { CycleContext } from "./cycle-context";
 
 export interface ExecutorDeps {
   fs: FileSystem;
@@ -32,6 +33,8 @@ export interface ExecutorConfig {
   onConflictCount?: (count: number) => void;
   /** deleteLocal 실행 직전 호출. vault 이벤트에서 구분하기 위해 pathLower 전달. */
   onBeforeDeleteLocal?: (pathLower: string) => void;
+  /** 사이클 컨텍스트 (execution trace) */
+  ctx?: CycleContext;
 }
 
 /** 내부 함수에서 사용하는 통합 컨텍스트 */
@@ -74,7 +77,17 @@ export async function executePlan(
   const total = executable.length + conflicts.length;
 
   // 일반 항목: 병렬
-  const tasks = executable.map((item) => () => executeItem(item, ctx));
+  const tasks = executable.map((item) => async () => {
+    ctx.ctx?.emit({ type: "exec_start", ts: Date.now(), pathLower: item.pathLower, action: item.action.type });
+    const start = Date.now();
+    try {
+      await executeItem(item, ctx);
+      ctx.ctx?.emit({ type: "exec_end", ts: Date.now(), pathLower: item.pathLower, action: item.action.type, ok: true, duration: Date.now() - start });
+    } catch (e) {
+      ctx.ctx?.emit({ type: "exec_end", ts: Date.now(), pathLower: item.pathLower, action: item.action.type, ok: false, error: (e as Error).message, duration: Date.now() - start });
+      throw e;
+    }
+  });
   const settled = await runWithConcurrency(tasks, concurrency, {
     signal: ctx.signal,
     onTaskComplete: () => {
@@ -102,13 +115,18 @@ export async function executePlan(
   }
   for (const item of conflicts) {
     if (ctx.signal?.aborted) break;
+    ctx.ctx?.emit({ type: "exec_start", ts: Date.now(), pathLower: item.pathLower, action: item.action.type });
+    const start = Date.now();
     try {
       await executeItem(item, ctx);
+      ctx.ctx?.emit({ type: "exec_end", ts: Date.now(), pathLower: item.pathLower, action: item.action.type, ok: true, duration: Date.now() - start });
       succeeded.push(item);
     } catch (e) {
       if (e instanceof ConflictSkippedError) {
+        ctx.ctx?.emit({ type: "exec_end", ts: Date.now(), pathLower: item.pathLower, action: item.action.type, ok: true, duration: Date.now() - start });
         deferred.push(item);
       } else {
+        ctx.ctx?.emit({ type: "exec_end", ts: Date.now(), pathLower: item.pathLower, action: item.action.type, ok: false, error: (e as Error).message, duration: Date.now() - start });
         failed.push({ item, error: e as Error });
       }
     }

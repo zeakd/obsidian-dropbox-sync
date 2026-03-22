@@ -1,4 +1,4 @@
-import { requestUrl } from "obsidian";
+import type { HttpClient } from "../http-client";
 import type { DropboxTokenResponse } from "./dropbox-types";
 
 const AUTHORIZE_URL = "https://www.dropbox.com/oauth2/authorize";
@@ -74,6 +74,7 @@ export function buildAuthUrl(params: {
  * authorization code -> access_token + refresh_token 교환.
  */
 export async function exchangeCodeForToken(
+  httpClient: HttpClient,
   appKey: string,
   code: string,
   codeVerifier: string,
@@ -91,7 +92,7 @@ export async function exchangeCodeForToken(
 
   const body = new URLSearchParams(params);
 
-  const resp = await requestUrl({
+  const resp = await httpClient({
     url: TOKEN_URL,
     method: "POST",
     contentType: "application/x-www-form-urlencoded",
@@ -110,6 +111,7 @@ export async function exchangeCodeForToken(
  * refresh_token -> 새 access_token 발급.
  */
 export async function refreshAccessToken(
+  httpClient: HttpClient,
   appKey: string,
   refreshToken: string,
 ): Promise<{ accessToken: string; expiresAt: number }> {
@@ -119,7 +121,7 @@ export async function refreshAccessToken(
     client_id: appKey,
   });
 
-  const resp = await requestUrl({
+  const resp = await httpClient({
     url: TOKEN_URL,
     method: "POST",
     contentType: "application/x-www-form-urlencoded",

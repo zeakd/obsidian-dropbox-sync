@@ -1,15 +1,13 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test";
 import { DropboxAdapter, DropboxRateLimitError } from "@/adapters/dropbox-adapter";
+import type { HttpClient } from "@/http-client";
 
-// requestUrl mock
-const requestUrlMock = mock();
-mock.module("obsidian", () => ({
-  requestUrl: (...args: unknown[]) => requestUrlMock(...args),
-  Platform: { isDesktop: true, isMobile: false },
-}));
+// httpClient mock
+const httpClientMock = mock() as unknown as ReturnType<typeof mock> & HttpClient;
 
 function createAdapter(): DropboxAdapter {
   const adapter = new DropboxAdapter({
+    httpClient: (...args: unknown[]) => (httpClientMock as any)(...args),
     appKey: "test-key",
     remotePath: "",
     getAccessToken: () => "test-token",
@@ -24,21 +22,21 @@ function createAdapter(): DropboxAdapter {
 
 describe("DropboxAdapter retry on 429", () => {
   beforeEach(() => {
-    requestUrlMock.mockReset();
+    httpClientMock.mockReset();
   });
 
   test("rpcCall: 429 한 번 → retry 후 성공", async () => {
     const adapter = createAdapter();
 
     // 첫 호출: 429
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 429,
       json: { error: { retry_after: 0 } },
       text: "rate limited",
     });
 
     // 두 번째 호출: 성공
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 200,
       json: {
         entries: [],
@@ -51,7 +49,7 @@ describe("DropboxAdapter retry on 429", () => {
     const result = await adapter.listChanges();
     expect(result.entries).toEqual([]);
     expect(result.cursor).toBe("cursor_1");
-    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+    expect(httpClientMock).toHaveBeenCalledTimes(2);
   });
 
   test("rpcCall: 429 연속 5번 (max 4 retry 초과) → DropboxRateLimitError", async () => {
@@ -59,7 +57,7 @@ describe("DropboxAdapter retry on 429", () => {
 
     // 5번 연속 429
     for (let i = 0; i < 5; i++) {
-      requestUrlMock.mockResolvedValueOnce({
+      httpClientMock.mockResolvedValueOnce({
         status: 429,
         json: { error: { retry_after: 0 } },
         text: "rate limited",
@@ -67,21 +65,21 @@ describe("DropboxAdapter retry on 429", () => {
     }
 
     await expect(adapter.listChanges()).rejects.toThrow(DropboxRateLimitError);
-    expect(requestUrlMock).toHaveBeenCalledTimes(5);
+    expect(httpClientMock).toHaveBeenCalledTimes(5);
   });
 
   test("download: 429 → retry 후 성공", async () => {
     const adapter = createAdapter();
 
     // 첫 호출: 429
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 429,
       json: { error: { retry_after: 0 } },
       text: "rate limited",
     });
 
     // 두 번째 호출: 성공
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 200,
       arrayBuffer: new ArrayBuffer(5),
       headers: {
@@ -98,7 +96,7 @@ describe("DropboxAdapter retry on 429", () => {
 
     const result = await adapter.download("test.md");
     expect(result.metadata.rev).toBe("rev_1");
-    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+    expect(httpClientMock).toHaveBeenCalledTimes(2);
   });
 
   test("upload: 429 → retry 후 성공", async () => {
@@ -106,14 +104,14 @@ describe("DropboxAdapter retry on 429", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 첫 호출: 429
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 429,
       json: { error: { retry_after: 0 } },
       text: "rate limited",
     });
 
     // 두 번째 호출: 성공
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 200,
       json: {
         path_display: "/test.md",
@@ -127,7 +125,7 @@ describe("DropboxAdapter retry on 429", () => {
 
     const result = await adapter.upload("test.md", data);
     expect(result.rev).toBe("rev_2");
-    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+    expect(httpClientMock).toHaveBeenCalledTimes(2);
   });
 
   // ── 5xx retry ──
@@ -136,13 +134,13 @@ describe("DropboxAdapter retry on 429", () => {
     const adapter = createAdapter();
     const data = new Uint8Array([1, 2, 3]);
 
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 503,
       json: {},
       text: "service unavailable",
     });
 
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 200,
       json: {
         path_display: "/test.md",
@@ -156,19 +154,19 @@ describe("DropboxAdapter retry on 429", () => {
 
     const result = await adapter.upload("test.md", data);
     expect(result.rev).toBe("rev_3");
-    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+    expect(httpClientMock).toHaveBeenCalledTimes(2);
   });
 
   test("download: 500 → retry 후 성공", async () => {
     const adapter = createAdapter();
 
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 500,
       json: {},
       text: "internal server error",
     });
 
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 200,
       arrayBuffer: new ArrayBuffer(5),
       headers: {
@@ -185,19 +183,19 @@ describe("DropboxAdapter retry on 429", () => {
 
     const result = await adapter.download("test.md");
     expect(result.metadata.rev).toBe("rev_1");
-    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+    expect(httpClientMock).toHaveBeenCalledTimes(2);
   });
 
   test("rpcCall: 503 → retry 후 성공", async () => {
     const adapter = createAdapter();
 
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 503,
       json: {},
       text: "service unavailable",
     });
 
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 200,
       json: {
         entries: [],
@@ -209,7 +207,7 @@ describe("DropboxAdapter retry on 429", () => {
 
     const result = await adapter.listChanges();
     expect(result.cursor).toBe("cursor_2");
-    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+    expect(httpClientMock).toHaveBeenCalledTimes(2);
   });
 
   test("upload: 503 연속 5번 → 에러 throw", async () => {
@@ -217,7 +215,7 @@ describe("DropboxAdapter retry on 429", () => {
     const data = new Uint8Array([1]);
 
     for (let i = 0; i < 5; i++) {
-      requestUrlMock.mockResolvedValueOnce({
+      httpClientMock.mockResolvedValueOnce({
         status: 503,
         json: {},
         text: "service unavailable",
@@ -225,21 +223,21 @@ describe("DropboxAdapter retry on 429", () => {
     }
 
     await expect(adapter.upload("test.md", data)).rejects.toThrow("Dropbox API error 503");
-    expect(requestUrlMock).toHaveBeenCalledTimes(5);
+    expect(httpClientMock).toHaveBeenCalledTimes(5);
   });
 
   test("rpcCall: 409 reset → DropboxCursorResetError (retry 안 함)", async () => {
     const adapter = createAdapter();
     const { DropboxCursorResetError } = await import("@/adapters/dropbox-adapter");
 
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 409,
       json: { error_summary: "reset/.." },
       text: "cursor reset",
     });
 
     await expect(adapter.listChanges("old_cursor")).rejects.toThrow(DropboxCursorResetError);
-    expect(requestUrlMock).toHaveBeenCalledTimes(1);
+    expect(httpClientMock).toHaveBeenCalledTimes(1);
   });
 
   // ── 네트워크 에러 retry ──
@@ -247,9 +245,9 @@ describe("DropboxAdapter retry on 429", () => {
   test("rpcCall: 네트워크 에러 1회 → retry 후 성공", async () => {
     const adapter = createAdapter();
 
-    requestUrlMock.mockRejectedValueOnce(new Error("The network connection was lost."));
+    httpClientMock.mockRejectedValueOnce(new Error("The network connection was lost."));
 
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockResolvedValueOnce({
       status: 200,
       json: { entries: [], cursor: "cursor_net", has_more: false },
       text: "{}",
@@ -257,7 +255,7 @@ describe("DropboxAdapter retry on 429", () => {
 
     const result = await adapter.listChanges();
     expect(result.cursor).toBe("cursor_net");
-    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+    expect(httpClientMock).toHaveBeenCalledTimes(2);
   });
 
   test("upload: 네트워크 에러 연속 5번 → throw", async () => {
@@ -265,19 +263,19 @@ describe("DropboxAdapter retry on 429", () => {
     const data = new Uint8Array([1]);
 
     for (let i = 0; i < 5; i++) {
-      requestUrlMock.mockRejectedValueOnce(new Error("The network connection was lost."));
+      httpClientMock.mockRejectedValueOnce(new Error("The network connection was lost."));
     }
 
     await expect(adapter.upload("test.md", data)).rejects.toThrow("network connection was lost");
-    expect(requestUrlMock).toHaveBeenCalledTimes(5);
+    expect(httpClientMock).toHaveBeenCalledTimes(5);
   });
 
   test("download: 네트워크 에러 → 5xx → 성공", async () => {
     const adapter = createAdapter();
 
-    requestUrlMock.mockRejectedValueOnce(new Error("Request failed"));
-    requestUrlMock.mockResolvedValueOnce({ status: 503, json: {}, text: "unavailable" });
-    requestUrlMock.mockResolvedValueOnce({
+    httpClientMock.mockRejectedValueOnce(new Error("Request failed"));
+    httpClientMock.mockResolvedValueOnce({ status: 503, json: {}, text: "unavailable" });
+    httpClientMock.mockResolvedValueOnce({
       status: 200,
       arrayBuffer: new ArrayBuffer(3),
       headers: {
@@ -294,6 +292,6 @@ describe("DropboxAdapter retry on 429", () => {
 
     const result = await adapter.download("test.md");
     expect(result.metadata.rev).toBe("rev_net");
-    expect(requestUrlMock).toHaveBeenCalledTimes(3);
+    expect(httpClientMock).toHaveBeenCalledTimes(3);
   });
 });

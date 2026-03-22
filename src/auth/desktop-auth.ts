@@ -1,4 +1,5 @@
 import { Notice } from "obsidian";
+import type { HttpClient } from "../http-client";
 import {
   generateCodeVerifier,
   generateCodeChallenge,
@@ -24,7 +25,10 @@ export interface AuthTokens {
 export class DesktopAuth {
   private pending: { codeVerifier: string; state: string } | null = null;
 
-  constructor(private getAppKey: () => string) {}
+  constructor(
+    private getAppKey: () => string,
+    private httpClient: HttpClient,
+  ) {}
 
   async start(): Promise<void> {
     const appKey = this.getAppKey();
@@ -72,6 +76,7 @@ export class DesktopAuth {
     try {
       const appKey = this.getAppKey();
       const tokenInfo = await exchangeCodeForToken(
+        this.httpClient,
         appKey,
         code,
         this.pending.codeVerifier,

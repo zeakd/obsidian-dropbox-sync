@@ -3,6 +3,7 @@ import type { ConflictStrategy } from "../types";
 import type DropboxSyncPlugin from "../main";
 import { ConfirmModal } from "./confirm-modal";
 import { DEFAULT_APP_KEY, getEffectiveAppKey, isValidSyncName } from "../settings";
+import { obsidianHttpClient } from "../http-client.obsidian";
 import {
   generateCodeVerifier,
   generateCodeChallenge,
@@ -343,6 +344,7 @@ export class DropboxSyncSettingTab extends PluginSettingTab {
           }
           try {
             const tokenInfo = await exchangeCodeForToken(
+              obsidianHttpClient,
               appKey,
               authCodeInput,
               this.codeVerifier,

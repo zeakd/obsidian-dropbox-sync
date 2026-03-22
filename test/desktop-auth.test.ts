@@ -44,7 +44,7 @@ describe("DesktopAuth", () => {
   let auth: DesktopAuth;
 
   beforeEach(() => {
-    auth = new DesktopAuth(() => "test_app_key");
+    auth = new DesktopAuth(() => "test_app_key", (async () => ({ status: 200, json: {}, text: "", headers: {}, arrayBuffer: new ArrayBuffer(0) })) as any);
     mockNotice.mockClear();
     mockWindowOpen.mockClear();
     mockExchangeThrow = null;
@@ -68,7 +68,7 @@ describe("DesktopAuth", () => {
   });
 
   test("start: appKey 없으면 Notice 표시", async () => {
-    auth = new DesktopAuth(() => "");
+    auth = new DesktopAuth(() => "", (async () => ({ status: 200, json: {}, text: "", headers: {}, arrayBuffer: new ArrayBuffer(0) })) as any);
     await auth.start();
 
     expect(mockNotice).toHaveBeenCalledTimes(1);

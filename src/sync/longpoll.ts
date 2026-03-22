@@ -1,6 +1,7 @@
-import { requestUrl } from "obsidian";
+import type { HttpClient } from "../http-client";
 
 export interface LongpollConfig {
+  httpClient: HttpClient;
   getCursor: () => Promise<string | null>;
   isSyncing: () => boolean;
   isEnabled: () => boolean;
@@ -47,12 +48,11 @@ export class LongpollManager {
 
       this.active = true;
 
-      const resp = await requestUrl({
+      const resp = await this.config.httpClient({
         url: "https://notify.dropboxapi.com/2/files/list_folder/longpoll",
         method: "POST",
         contentType: "application/json",
         body: JSON.stringify({ cursor, timeout: 30 }),
-        throw: false,
       });
 
       if (!this.active || !this.config.isEnabled()) return;

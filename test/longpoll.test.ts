@@ -27,23 +27,21 @@ function fakeClearTimeout(id: number): void {
   removeEventListener: mock(() => {}),
 };
 
-// ── mock: obsidian의 requestUrl ──
-
-let mockRequestUrl: ReturnType<typeof mock>;
-let requestUrlImpl: (opts: unknown) => Promise<unknown>;
-
-mock.module("obsidian", () => ({
-  requestUrl: (...args: unknown[]) => {
-    mockRequestUrl(...args);
-    return requestUrlImpl(args[0]);
-  },
-}));
-
 // 모듈 로드는 window 설정 후
 import { LongpollManager, type LongpollConfig } from "@/sync/longpoll";
+import type { HttpClient } from "@/http-client";
+
+// ── mock: httpClient ──
+
+let mockHttpClient: ReturnType<typeof mock>;
+let httpClientImpl: (opts: unknown) => Promise<unknown>;
 
 function createConfig(overrides: Partial<LongpollConfig> = {}): LongpollConfig {
   return {
+    httpClient: ((...args: unknown[]) => {
+      mockHttpClient(...args);
+      return httpClientImpl(args[0]);
+    }) as HttpClient,
     getCursor: async () => "cursor_abc",
     isSyncing: () => false,
     isEnabled: () => true,
@@ -65,8 +63,8 @@ describe("LongpollManager", () => {
     (window as unknown as Record<string, unknown>).setTimeout = fakeSetTimeout;
     (window as unknown as Record<string, unknown>).clearTimeout = fakeClearTimeout;
 
-    mockRequestUrl = mock(() => {});
-    requestUrlImpl = async () => ({
+    mockHttpClient = mock(() => {});
+    httpClientImpl = async () => ({
       status: 200,
       json: { changes: false },
     });
@@ -116,7 +114,7 @@ describe("LongpollManager", () => {
   // ── run: changes=true → onChanges ──
 
   test("changes detected → onChanges 호출", async () => {
-    requestUrlImpl = async () => ({
+    httpClientImpl = async () => ({
       status: 200,
       json: { changes: true },
     });
@@ -146,7 +144,7 @@ describe("LongpollManager", () => {
     mgr.schedule();
     await flushTimersAsync();
 
-    expect(mockRequestUrl).not.toHaveBeenCalled();
+    expect(mockHttpClient).not.toHaveBeenCalled();
   });
 
   // ── run: syncing 중 ──
@@ -158,13 +156,13 @@ describe("LongpollManager", () => {
     mgr.schedule();
     await flushTimersAsync();
 
-    expect(mockRequestUrl).not.toHaveBeenCalled();
+    expect(mockHttpClient).not.toHaveBeenCalled();
   });
 
   // ── API 에러 ──
 
   test("API 에러 status → 로그 기록", async () => {
-    requestUrlImpl = async () => ({
+    httpClientImpl = async () => ({
       status: 500,
       json: {},
     });
@@ -178,7 +176,7 @@ describe("LongpollManager", () => {
   // ── 네트워크 에러 → 백오프 ──
 
   test("네트워크 에러 → 백오프 재시도 등록", async () => {
-    requestUrlImpl = async () => {
+    httpClientImpl = async () => {
       throw new Error("network error");
     };
 
@@ -193,7 +191,7 @@ describe("LongpollManager", () => {
   // ── backoff 응답 ──
 
   test("backoff 응답 → 지연 후 재스케줄", async () => {
-    requestUrlImpl = async () => ({
+    httpClientImpl = async () => ({
       status: 200,
       json: { changes: false, backoff: 5 },
     });
@@ -205,7 +203,7 @@ describe("LongpollManager", () => {
   });
 
   test("backoff + changes → 지연 후 onChanges", async () => {
-    requestUrlImpl = async () => ({
+    httpClientImpl = async () => ({
       status: 200,
       json: { changes: true, backoff: 2 },
     });
@@ -222,7 +220,7 @@ describe("LongpollManager", () => {
   // ── requestUrl 호출 파라미터 ──
 
   test("requestUrl에 올바른 파라미터 전달", async () => {
-    requestUrlImpl = async () => ({
+    httpClientImpl = async () => ({
       status: 200,
       json: { changes: false },
     });
@@ -230,8 +228,8 @@ describe("LongpollManager", () => {
     mgr.schedule();
     await flushTimersAsync();
 
-    expect(mockRequestUrl).toHaveBeenCalledTimes(1);
-    const callArgs = (mockRequestUrl as ReturnType<typeof mock>).mock.calls[0][0] as Record<string, unknown>;
+    expect(mockHttpClient).toHaveBeenCalledTimes(1);
+    const callArgs = (mockHttpClient as ReturnType<typeof mock>).mock.calls[0][0] as Record<string, unknown>;
     expect(callArgs).toMatchObject({
       url: "https://notify.dropboxapi.com/2/files/list_folder/longpoll",
       method: "POST",
@@ -246,7 +244,7 @@ describe("LongpollManager", () => {
     config = createConfig({ isEnabled: () => enabled });
     mgr = new LongpollManager(config);
 
-    requestUrlImpl = async () => {
+    httpClientImpl = async () => {
       // API 호출 중간에 disabled 됨
       enabled = false;
       return { status: 200, json: { changes: true } };

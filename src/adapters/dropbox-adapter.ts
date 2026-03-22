@@ -1,4 +1,4 @@
-import { requestUrl } from "obsidian";
+import type { HttpClient } from "../http-client";
 import type { RemoteStorage } from "./interfaces";
 import type {
   RemoteEntry,
@@ -25,6 +25,7 @@ function headerSafeJson(obj: object): string {
 }
 
 export interface DropboxAdapterConfig {
+  httpClient: HttpClient;
   appKey: string;
   remotePath: string;
   getAccessToken: () => string;
@@ -35,7 +36,7 @@ export interface DropboxAdapterConfig {
 
 /**
  * Dropbox API v2 직접 호출 어댑터.
- * requestUrl 기반 (CORS 우회, 데스크톱+모바일).
+ * HttpClient 기반. Obsidian에서는 requestUrl, CLI에서는 fetch를 주입한다.
  */
 export class DropboxAdapter implements RemoteStorage {
   constructor(private config: DropboxAdapterConfig) {}
@@ -170,7 +171,7 @@ export class DropboxAdapter implements RemoteStorage {
   }
 
   /**
-   * 공통 retry 루프: ensureValidToken → requestUrl → retryable 판정 → 409/에러 처리.
+   * 공통 retry 루프: ensureValidToken → httpClient → retryable 판정 → 409/에러 처리.
    */
   private async withRetry(opts: {
     url: string;
@@ -186,7 +187,7 @@ export class DropboxAdapter implements RemoteStorage {
       let resp;
       try {
         await this.ensureValidToken();
-        resp = await requestUrl({
+        resp = await this.config.httpClient({
           url: opts.url,
           method: opts.method,
           contentType: opts.contentType,
@@ -195,7 +196,6 @@ export class DropboxAdapter implements RemoteStorage {
             ...opts.headers,
           },
           body: opts.body,
-          throw: false,
         });
       } catch (e) {
         // 네트워크 연결 실패 (iOS -1005 등) — 긴 딜레이로 연결 풀 리셋 유도
@@ -258,6 +258,7 @@ export class DropboxAdapter implements RemoteStorage {
   private async doRefreshToken(): Promise<void> {
     try {
       const result = await refreshAccessToken(
+        this.config.httpClient,
         this.config.appKey,
         this.config.getRefreshToken(),
       );

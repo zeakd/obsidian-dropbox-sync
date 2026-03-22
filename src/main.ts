@@ -20,6 +20,7 @@ import { IndexedDBStore } from "./adapters/indexeddb-store";
 import { VaultFileStore } from "./adapters/vault-file-store";
 import type { ConflictContext, DeleteGuardResult, SyncResult } from "./types";
 import type { RemoteStorage, SyncStateStore } from "./adapters/interfaces";
+import { obsidianHttpClient } from "./http-client.obsidian";
 import { DesktopAuth } from "./auth/desktop-auth";
 import { LongpollManager } from "./sync/longpoll";
 import { EngineManager } from "./sync/engine-manager";
@@ -101,7 +102,7 @@ export default class DropboxSyncPlugin extends Plugin {
     registerDemoCommands(this);
 
     // Auth (데스크톱)
-    this.auth = new DesktopAuth(() => getEffectiveAppKey(this.settings));
+    this.auth = new DesktopAuth(() => getEffectiveAppKey(this.settings), obsidianHttpClient);
     if (Platform.isDesktop) {
       this.registerObsidianProtocolHandler(
         "dropbox-sync",
@@ -340,14 +341,12 @@ export default class DropboxSyncPlugin extends Plugin {
     if (!appKey || !this.settings.accessToken) return null;
 
     try {
-      const { requestUrl } = await import("obsidian");
-      const resp = await requestUrl({
+      const resp = await obsidianHttpClient({
         url: "https://api.dropboxapi.com/2/files/list_folder",
         method: "POST",
         contentType: "application/json",
         headers: { Authorization: `Bearer ${this.settings.accessToken}` },
         body: JSON.stringify({ path: `/${syncName}`, recursive: true, limit: 100 }),
-        throw: false,
       });
       if (resp.status !== 200) return null;
       const data = resp.json as { entries: Array<Record<string, unknown>> };
@@ -371,6 +370,7 @@ export default class DropboxSyncPlugin extends Plugin {
       });
 
       this.longpoll = new LongpollManager({
+        httpClient: obsidianHttpClient,
         getCursor: async () => this.engineMgr?.store?.getMeta("cursor") ?? null,
         isSyncing: () => this.syncing,
         isEnabled: () => this.settings.syncEnabled && !!this.engineMgr?.store,
@@ -385,6 +385,7 @@ export default class DropboxSyncPlugin extends Plugin {
     const vaultId = this.app.vault.getName();
     const fs = new VaultAdapter(this.app.vault, this.settings.excludePatterns, this.app.fileManager);
     const remote = new DropboxAdapter({
+      httpClient: obsidianHttpClient,
       appKey: getEffectiveAppKey(this.settings),
       remotePath: getEffectiveRemotePath(this.settings),
       getAccessToken: () => this.settings.accessToken,

@@ -6,6 +6,7 @@ import type {
   SyncPlanItem,
   SyncPlan,
 } from "../types";
+import type { CycleContext } from "./cycle-context";
 
 /** 로컬 파일 상태 (planner 입력) */
 export interface LocalState {
@@ -119,6 +120,8 @@ function classifyRemoteOnly(
 export interface PlanOptions {
   /** 로컬에서 의도적으로 삭제된 경로 (pathLower) */
   localDeletedPaths?: Set<string>;
+  /** 사이클 컨텍스트 (decision trace) */
+  ctx?: CycleContext;
 }
 
 /**
@@ -187,6 +190,20 @@ export function createPlan(
       localDeleteIntended: options?.localDeletedPaths?.has(pathLower),
     };
     const action = classifyChange(localState, remoteState, baseEntry, classifyOpts);
+
+    if (options?.ctx) {
+      options.ctx.emit({
+        type: "plan_decision",
+        ts: Date.now(),
+        pathLower,
+        action: action.type,
+        reason: "reason" in action ? action.reason : `conflict(${action.localHash?.slice(0, 8)}/${action.remoteHash?.slice(0, 8)})`,
+        localHash: localState?.hash ?? null,
+        remoteHash: remoteState?.hash ?? null,
+        baseLocalHash: baseEntry?.baseLocalHash ?? null,
+        baseRemoteHash: baseEntry?.baseRemoteHash ?? null,
+      });
+    }
 
     if (action.type === "noop") {
       stats.noop++;

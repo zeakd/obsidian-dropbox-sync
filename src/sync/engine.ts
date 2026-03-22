@@ -6,6 +6,7 @@ import { executePlan } from "./executor";
 import { checkDeleteGuard } from "./guards";
 import { DropboxCursorResetError } from "../adapters/dropbox-adapter";
 import { isExcluded } from "../exclude";
+import { CycleContext } from "./cycle-context";
 
 /** conflict 파일 판별 (.conflict-YYYY-MM-DDTHHMM 패턴) */
 export function isConflictFile(path: string): boolean {
@@ -35,6 +36,10 @@ export interface SyncEngineOptions {
   onProgress?: (completed: number, total: number) => void;
   /** conflict 직렬 실행 전 호출. conflict 총 수 전달. */
   onConflictCount?: (count: number) => void;
+  /** 사이클 리포트 활성화 */
+  enableCycleReports?: boolean;
+  /** 사이클 리포트 저장 콜백 */
+  onCycleReport?: (report: string, cycleId: string) => Promise<void>;
 }
 
 export interface CycleResult {
@@ -44,6 +49,8 @@ export interface CycleResult {
   deletesSkipped?: number;
   /** 활성 파일 보호로 건너뛴 항목 수 */
   deferredCount?: number;
+  /** 사이클 리포트 (JSONL) */
+  cycleReport?: string;
 }
 
 /**
@@ -91,13 +98,22 @@ export class SyncEngine {
 
   async runCycle(signal?: AbortSignal): Promise<CycleResult> {
     const { fs, remote, store } = this.deps;
+    const ctx = this.options.enableCycleReports ? new CycleContext() : undefined;
+
+    // 0. 사이클 시작 이벤트
+    if (ctx) {
+      const cursor = await store.getMeta("cursor");
+      ctx.emit({ type: "cycle_start", ts: ctx.startTime, cursor: cursor ?? null });
+    }
 
     // 1. 로컬 파일 수집
     signal?.throwIfAborted();
+    const localScanStart = Date.now();
     const localFiles = this.collectLocalFiles(await fs.list());
+    ctx?.emit({ type: "local_scan", ts: Date.now(), fileCount: localFiles.length, duration: Date.now() - localScanStart });
 
     // 2. 원격 변경 수집 (delta)
-    const { deltaEntries, latestCursor } = await this.fetchRemoteDeltas(store, remote, signal);
+    const { deltaEntries, latestCursor } = await this.fetchRemoteDeltas(store, remote, signal, ctx);
 
     // 3. 이전 상태 로드
     signal?.throwIfAborted();
@@ -114,10 +130,11 @@ export class SyncEngine {
     const fullRemoteEntries = Array.from(fullRemoteMap.values());
     const plan = createPlan(localFiles, fullRemoteEntries, baseEntries, {
       localDeletedPaths: this.deletedPaths,
+      ctx,
     });
 
     // 7. 삭제 가드 적용
-    const { planToExecute, deletesSkipped } = await this.applyDeleteGuard(plan);
+    const { planToExecute, deletesSkipped } = await this.applyDeleteGuard(plan, ctx);
 
     // 8. 계획 실행
     signal?.throwIfAborted();
@@ -129,12 +146,31 @@ export class SyncEngine {
       concurrency: this.options.concurrency,
       onProgress: this.options.onProgress,
       onConflictCount: this.options.onConflictCount,
+      ctx,
     });
 
     // 9. 상태 갱신
     await this.finalizeState(store, result, latestCursor, deletesSkipped);
 
     const deferredCount = result.deferred.length > 0 ? result.deferred.length : undefined;
+
+    // 10. 사이클 종료 이벤트 + 리포트
+    if (ctx) {
+      ctx.emit({
+        type: "cycle_end",
+        ts: Date.now(),
+        duration: Date.now() - ctx.startTime,
+        stats: plan.stats as unknown as Record<string, number>,
+        failed: result.failed.length,
+        deferred: result.deferred.length,
+      });
+
+      const report = ctx.toJsonl();
+      await this.options.onCycleReport?.(report, ctx.cycleId);
+
+      return { plan, result, deletesSkipped, deferredCount, cycleReport: report };
+    }
+
     return { plan, result, deletesSkipped, deferredCount };
   }
 
@@ -150,13 +186,16 @@ export class SyncEngine {
     store: import("../adapters/interfaces").SyncStateStore,
     remote: import("../adapters/interfaces").RemoteStorage,
     signal?: AbortSignal,
+    ctx?: CycleContext,
   ): Promise<{ deltaEntries: RemoteEntry[]; latestCursor: string }> {
     let cursor = await store.getMeta("cursor");
+    const fetchStart = Date.now();
     let changes;
     try {
       changes = await remote.listChanges(cursor ?? undefined);
     } catch (e) {
       if (e instanceof DropboxCursorResetError && cursor) {
+        ctx?.emit({ type: "cursor_reset", ts: Date.now(), oldCursor: cursor });
         await store.setMeta("cursor", "");
         cursor = null;
         changes = await remote.listChanges();
@@ -169,12 +208,30 @@ export class SyncEngine {
     let latestCursor = changes.cursor;
     let hasMore = changes.hasMore;
 
+    ctx?.emit({
+      type: "remote_fetch",
+      ts: Date.now(),
+      deltaCount: deltaEntries.length,
+      cursor: latestCursor,
+      hasMore,
+      duration: Date.now() - fetchStart,
+    });
+
     while (hasMore) {
       signal?.throwIfAborted();
+      const pageStart = Date.now();
       const more = await remote.listChanges(latestCursor);
       deltaEntries = deltaEntries.concat(more.entries);
       latestCursor = more.cursor;
       hasMore = more.hasMore;
+      ctx?.emit({
+        type: "remote_fetch",
+        ts: Date.now(),
+        deltaCount: more.entries.length,
+        cursor: latestCursor,
+        hasMore,
+        duration: Date.now() - pageStart,
+      });
     }
 
     return { deltaEntries, latestCursor };
@@ -241,12 +298,22 @@ export class SyncEngine {
   /** 삭제 가드 적용 → 실행할 plan과 스킵 수 반환 */
   private async applyDeleteGuard(
     plan: SyncPlan,
+    ctx?: CycleContext,
   ): Promise<{ planToExecute: SyncPlan; deletesSkipped: number }> {
+    const threshold = this.options.deleteThreshold ?? 5;
     const guard = checkDeleteGuard(
       plan,
-      this.options.deleteThreshold ?? 5,
+      threshold,
       this.options.deleteProtection ?? false,
     );
+
+    ctx?.emit({
+      type: "delete_guard",
+      ts: Date.now(),
+      deleteCount: guard.deleteItems.length,
+      threshold,
+      passed: guard.passed,
+    });
 
     if (guard.passed) {
       return { planToExecute: plan, deletesSkipped: 0 };
