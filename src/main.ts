@@ -20,6 +20,7 @@ import { IndexedDBStore } from "./adapters/indexeddb-store";
 import { VaultFileStore } from "./adapters/vault-file-store";
 import type { ConflictContext, DeleteGuardResult, SyncResult } from "./types";
 import type { RemoteStorage, SyncStateStore } from "./adapters/interfaces";
+// eslint-disable-next-line obsidianmd/hardcoded-config-path -- false positive: ".obsidian" is part of module name, not config path
 import { obsidianHttpClient } from "./http-client.obsidian";
 import { DesktopAuth } from "./auth/desktop-auth";
 import { LongpollManager } from "./sync/longpoll";
@@ -183,12 +184,12 @@ export default class DropboxSyncPlugin extends Plugin {
   private async handleOpenFile(params: Record<string, string>): Promise<void> {
     const filePath = params.file ? decodeURIComponent(params.file) : null;
     if (!filePath) {
-      new Notice("Dropbox Sync: missing 'file' parameter.");
+      new Notice("Dropbox sync: missing 'file' parameter.");
       return;
     }
 
     if (!this.settings.refreshToken) {
-      new Notice("Dropbox Sync: not connected. Open settings to connect first.");
+      new Notice("Dropbox sync: not connected. Open settings to connect first.");
       return;
     }
 
@@ -209,7 +210,7 @@ export default class DropboxSyncPlugin extends Plugin {
       const fs = this.engineMgr?.fs;
       const store = this.engineMgr?.store;
       if (!remote || !fs) {
-        new Notice("Dropbox Sync: engine not ready. Try again after sync is configured.");
+        new Notice("Dropbox sync: engine not ready. Try again after sync is configured.");
         return;
       }
 
