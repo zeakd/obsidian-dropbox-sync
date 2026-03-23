@@ -20,8 +20,7 @@ import { IndexedDBStore } from "./adapters/indexeddb-store";
 import { VaultFileStore } from "./adapters/vault-file-store";
 import type { ConflictContext, DeleteGuardResult, SyncResult } from "./types";
 import type { RemoteStorage, SyncStateStore } from "./adapters/interfaces";
-// eslint-disable-next-line obsidianmd/hardcoded-config-path -- false positive: ".obsidian" is part of module name, not config path
-import { obsidianHttpClient } from "./http-client.obsidian";
+import { obsidianHttpClient } from "./http-client.plugin";
 import { DesktopAuth } from "./auth/desktop-auth";
 import { LongpollManager } from "./sync/longpoll";
 import { EngineManager } from "./sync/engine-manager";

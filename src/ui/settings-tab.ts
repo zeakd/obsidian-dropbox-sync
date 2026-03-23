@@ -3,8 +3,7 @@ import type { ConflictStrategy } from "../types";
 import type DropboxSyncPlugin from "../main";
 import { ConfirmModal } from "./confirm-modal";
 import { DEFAULT_APP_KEY, getEffectiveAppKey, isValidSyncName } from "../settings";
-// eslint-disable-next-line obsidianmd/hardcoded-config-path -- false positive: ".obsidian" is part of module name, not config path
-import { obsidianHttpClient } from "../http-client.obsidian";
+import { obsidianHttpClient } from "../http-client.plugin";
 import {
   generateCodeVerifier,
   generateCodeChallenge,
