@@ -88,6 +88,7 @@ export class DropboxAdapter implements RemoteStorage {
     const resp = await this.withRetry({
       url: `${CONTENT_BASE}/files/download`,
       method: "POST",
+      contentType: "application/octet-stream",
       headers: { "Dropbox-API-Arg": apiArg },
     });
 

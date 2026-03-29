@@ -128,6 +128,54 @@ describe("DropboxAdapter retry on 429", () => {
     expect(httpClientMock).toHaveBeenCalledTimes(2);
   });
 
+  // ── Content-Type 회귀 방지 ──
+
+  test("download: httpClient에 contentType을 명시적으로 전달한다", async () => {
+    const adapter = createAdapter();
+
+    httpClientMock.mockResolvedValueOnce({
+      status: 200,
+      arrayBuffer: new ArrayBuffer(3),
+      headers: {
+        "dropbox-api-result": JSON.stringify({
+          path_display: "/test.md",
+          content_hash: "abc",
+          server_modified: "2024-01-01T00:00:00Z",
+          rev: "rev_ct",
+          size: 3,
+        }),
+      },
+      text: "",
+    });
+
+    await adapter.download("test.md");
+
+    const req = httpClientMock.mock.calls[0]![0] as { contentType?: string };
+    expect(req.contentType).toBe("application/octet-stream");
+  });
+
+  test("upload: httpClient에 contentType을 명시적으로 전달한다", async () => {
+    const adapter = createAdapter();
+
+    httpClientMock.mockResolvedValueOnce({
+      status: 200,
+      json: {
+        path_display: "/test.md",
+        content_hash: "abc",
+        server_modified: "2024-01-01T00:00:00Z",
+        rev: "rev_ct2",
+        size: 3,
+      },
+      text: "",
+    });
+
+    await adapter.upload("test.md", new Uint8Array([1, 2, 3]));
+
+    const req = httpClientMock.mock.calls[0]![0] as { contentType?: string; headers?: Record<string, string> };
+    // upload은 headers에 Content-Type을 직접 설정
+    expect(req.headers?.["Content-Type"]).toBe("application/octet-stream");
+  });
+
   // ── 5xx retry ──
 
   test("upload: 503 → retry 후 성공", async () => {
