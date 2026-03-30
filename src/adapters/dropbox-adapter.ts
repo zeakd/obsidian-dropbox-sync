@@ -88,8 +88,10 @@ export class DropboxAdapter implements RemoteStorage {
     const resp = await this.withRetry({
       url: `${CONTENT_BASE}/files/download`,
       method: "POST",
-      contentType: "application/octet-stream",
-      headers: { "Dropbox-API-Arg": apiArg },
+      headers: {
+        "Dropbox-API-Arg": apiArg,
+        "Content-Type": "application/octet-stream",
+      },
     });
 
     const metadata = JSON.parse(
@@ -153,7 +155,7 @@ export class DropboxAdapter implements RemoteStorage {
     const resp = await this.withRetry({
       url: `${API_BASE}${endpoint}`,
       method: "POST",
-      contentType: "application/json",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       on409: (errBody) => {
         if (errBody.error_summary?.includes("reset")) {
@@ -178,7 +180,6 @@ export class DropboxAdapter implements RemoteStorage {
     url: string;
     method: string;
     headers?: Record<string, string>;
-    contentType?: string;
     body?: string | ArrayBuffer;
     on409?: (errBody: DropboxErrorResponse) => void;
     on429Final?: (errBody: DropboxErrorResponse) => void;
@@ -191,7 +192,6 @@ export class DropboxAdapter implements RemoteStorage {
         resp = await this.config.httpClient({
           url: opts.url,
           method: opts.method,
-          contentType: opts.contentType,
           headers: {
             Authorization: `Bearer ${this.config.getAccessToken()}`,
             ...opts.headers,

@@ -51,7 +51,7 @@ export class LongpollManager {
       const resp = await this.config.httpClient({
         url: "https://notify.dropboxapi.com/2/files/list_folder/longpoll",
         method: "POST",
-        contentType: "application/json",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cursor, timeout: 30 }),
       });
 

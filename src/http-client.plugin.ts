@@ -9,11 +9,17 @@ import { normalizeHeaders } from "./http-client";
 import type { HttpClient } from "./http-client";
 
 export const obsidianHttpClient: HttpClient = async (req) => {
+  // headers에서 Content-Type을 추출하여 Obsidian requestUrl의 contentType 파라미터로 전달.
+  // requestUrl은 contentType을 별도 파라미터로 받는 Obsidian 고유 API.
+  const headers = { ...req.headers };
+  const contentType = headers["Content-Type"];
+  delete headers["Content-Type"];
+
   const resp = await requestUrl({
     url: req.url,
     method: req.method,
-    contentType: req.contentType,
-    headers: req.headers,
+    contentType,
+    headers,
     body: req.body,
     throw: false,
   });

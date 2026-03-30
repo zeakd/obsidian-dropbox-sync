@@ -95,7 +95,7 @@ export async function exchangeCodeForToken(
   const resp = await httpClient({
     url: TOKEN_URL,
     method: "POST",
-    contentType: "application/x-www-form-urlencoded",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
   });
 
@@ -124,7 +124,7 @@ export async function refreshAccessToken(
   const resp = await httpClient({
     url: TOKEN_URL,
     method: "POST",
-    contentType: "application/x-www-form-urlencoded",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
   });
 

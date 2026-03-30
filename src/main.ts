@@ -344,8 +344,10 @@ export default class DropboxSyncPlugin extends Plugin {
       const resp = await obsidianHttpClient({
         url: "https://api.dropboxapi.com/2/files/list_folder",
         method: "POST",
-        contentType: "application/json",
-        headers: { Authorization: `Bearer ${this.settings.accessToken}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.settings.accessToken}`,
+        },
         body: JSON.stringify({ path: `/${syncName}`, recursive: true, limit: 100 }),
       });
       if (resp.status !== 200) return null;

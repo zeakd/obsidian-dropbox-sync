@@ -130,7 +130,7 @@ describe("DropboxAdapter retry on 429", () => {
 
   // ── Content-Type 회귀 방지 ──
 
-  test("download: httpClient에 contentType을 명시적으로 전달한다", async () => {
+  test("download: headers에 Content-Type을 명시적으로 전달한다", async () => {
     const adapter = createAdapter();
 
     httpClientMock.mockResolvedValueOnce({
@@ -150,11 +150,11 @@ describe("DropboxAdapter retry on 429", () => {
 
     await adapter.download("test.md");
 
-    const req = httpClientMock.mock.calls[0]![0] as { contentType?: string };
-    expect(req.contentType).toBe("application/octet-stream");
+    const req = httpClientMock.mock.calls[0]![0] as { headers?: Record<string, string> };
+    expect(req.headers?.["Content-Type"]).toBe("application/octet-stream");
   });
 
-  test("upload: httpClient에 contentType을 명시적으로 전달한다", async () => {
+  test("upload: headers에 Content-Type을 명시적으로 전달한다", async () => {
     const adapter = createAdapter();
 
     httpClientMock.mockResolvedValueOnce({
@@ -171,9 +171,23 @@ describe("DropboxAdapter retry on 429", () => {
 
     await adapter.upload("test.md", new Uint8Array([1, 2, 3]));
 
-    const req = httpClientMock.mock.calls[0]![0] as { contentType?: string; headers?: Record<string, string> };
-    // upload은 headers에 Content-Type을 직접 설정
+    const req = httpClientMock.mock.calls[0]![0] as { headers?: Record<string, string> };
     expect(req.headers?.["Content-Type"]).toBe("application/octet-stream");
+  });
+
+  test("rpcCall: headers에 Content-Type: application/json을 전달한다", async () => {
+    const adapter = createAdapter();
+
+    httpClientMock.mockResolvedValueOnce({
+      status: 200,
+      json: { entries: [], cursor: "cur_ct", has_more: false },
+      text: "{}",
+    });
+
+    await adapter.listChanges();
+
+    const req = httpClientMock.mock.calls[0]![0] as { headers?: Record<string, string> };
+    expect(req.headers?.["Content-Type"]).toBe("application/json");
   });
 
   // ── 5xx retry ──

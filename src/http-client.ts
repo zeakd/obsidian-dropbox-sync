@@ -8,7 +8,7 @@
 export interface HttpRequest {
   url: string;
   method: string;
-  contentType?: string;
+  /** Content-Type은 headers에 포함한다. 별도 필드 없음. */
   headers?: Record<string, string>;
   body?: string | ArrayBuffer;
 }
