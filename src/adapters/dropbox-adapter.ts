@@ -93,7 +93,7 @@ export class DropboxAdapter implements RemoteStorage {
     });
 
     const metadata = JSON.parse(
-      resp.headers["dropbox-api-result"] ?? "{}",
+      new Headers(resp.headers).get("dropbox-api-result") ?? "{}",
     ) as DropboxFileMetadata;
 
     return {
