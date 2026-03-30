@@ -17,8 +17,20 @@ export interface HttpResponse {
   status: number;
   json: unknown;
   text: string;
+  /** 응답 헤더. 키는 항상 소문자로 정규화된다. */
   headers: Record<string, string>;
   arrayBuffer: ArrayBuffer;
+}
+
+/** 헤더 키를 소문자로 정규화한다. HTTP 스펙상 헤더는 case-insensitive. */
+export function normalizeHeaders(
+  headers: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of Object.keys(headers)) {
+    out[key.toLowerCase()] = headers[key]!;
+  }
+  return out;
 }
 
 /**

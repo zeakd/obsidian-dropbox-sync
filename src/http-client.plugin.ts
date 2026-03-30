@@ -5,7 +5,8 @@
  * non-2xx에서 throw하지 않도록 throw: false를 하드코딩한다.
  */
 import { requestUrl } from "obsidian";
-import type { HttpClient, HttpResponse } from "./http-client";
+import { normalizeHeaders } from "./http-client";
+import type { HttpClient } from "./http-client";
 
 export const obsidianHttpClient: HttpClient = async (req) => {
   const resp = await requestUrl({
@@ -17,5 +18,11 @@ export const obsidianHttpClient: HttpClient = async (req) => {
     throw: false,
   });
 
-  return resp as HttpResponse;
+  return {
+    status: resp.status,
+    json: resp.json,
+    text: resp.text,
+    headers: normalizeHeaders(resp.headers),
+    arrayBuffer: resp.arrayBuffer,
+  };
 };
